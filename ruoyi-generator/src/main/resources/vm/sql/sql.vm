@@ -1,0 +1,29 @@
+-- 菜单 SQL
+insert into sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark)
+values('${functionName}', '${parentMenuId}', '1', '${businessName}', '${moduleName}/${businessName}/index', 1, 0, 'C', '0', '0', '${permissionPrefix}:list', '#', 'admin', current_timestamp, '', null, '${functionName}菜单');
+
+DO $$
+DECLARE
+    parent_id_val integer;
+BEGIN
+    -- 获取刚插入的菜单ID
+    SELECT max(menu_id) INTO parent_id_val FROM sys_menu;
+
+	-- 按钮 SQL
+	insert into sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark)
+	values('${functionName}查询', parent_id_val, '1',  '#', '', 1, 0, 'F', '0', '0', '${permissionPrefix}:query',        '#', 'admin', current_timestamp, '', null, '');
+	
+	insert into sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark)
+	values('${functionName}新增', parent_id_val, '2',  '#', '', 1, 0, 'F', '0', '0', '${permissionPrefix}:add',          '#', 'admin', current_timestamp, '', null, '');
+	
+	insert into sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark)
+	values('${functionName}修改', parent_id_val, '3',  '#', '', 1, 0, 'F', '0', '0', '${permissionPrefix}:edit',         '#', 'admin', current_timestamp, '', null, '');
+	
+	insert into sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark)
+	values('${functionName}删除', parent_id_val, '4',  '#', '', 1, 0, 'F', '0', '0', '${permissionPrefix}:remove',       '#', 'admin', current_timestamp, '', null, '');
+	
+	insert into sys_menu (menu_name, parent_id, order_num, path, component, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark)
+	values('${functionName}导出', parent_id_val, '5',  '#', '', 1, 0, 'F', '0', '0', '${permissionPrefix}:export',       '#', 'admin', current_timestamp, '', null, '');
+
+END 
+$$;
