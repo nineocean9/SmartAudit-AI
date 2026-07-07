@@ -195,6 +195,17 @@ ai:
       - 严禁编造不存在的法规条款
       - 对于审计问题定性，使用规范的法律语言和审计专业术语
 
+    # ── 向量化（Embedding）配置 ────────────────────────────────
+    embedding:
+      # 提供商: dashscope
+      provider: dashscope
+      # API Key（留空则复用 chat 的 api-key；百炼 API Key 以 sk- 开头）
+      api-key: your-bailian-api-key
+      # 模型: text-embedding-v4(最新/1024维) | text-embedding-v3(1024维)
+      model: text-embedding-v4
+      # 百炼兼容接口地址（{WorkspaceId} 替换为你的业务空间ID）
+      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+
 # ============================================================
 #  切换示例
 # ============================================================

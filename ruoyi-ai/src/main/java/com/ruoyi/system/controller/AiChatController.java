@@ -161,7 +161,6 @@ public class AiChatController extends BaseController
     {
         SseEmitter emitter = new SseEmitter(0L);
         Long userId = SecurityUtils.getUserId();
-        // 新线程异步执行，当前 Tomcat 线程立即返回 emitter，不阻塞线程池
         new Thread(() -> aiChatService.chat(conversationId, message, userId, emitter)).start();
         return emitter;
     }

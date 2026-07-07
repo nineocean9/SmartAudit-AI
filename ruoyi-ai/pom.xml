@@ -17,31 +17,38 @@
 
     <dependencies>
 
-		<!-- LangChain4j 核心 -->
-		<dependency>
-		    <groupId>dev.langchain4j</groupId>
-		    <artifactId>langchain4j</artifactId>
-		    <version>0.36.2</version>
-		</dependency>
-		
-		<!-- OpenAI 适配（DashScope / DeepSeek / OpenAI 均走此模块） -->
-		<dependency>
-		    <groupId>dev.langchain4j</groupId>
-		    <artifactId>langchain4j-open-ai</artifactId>
-		    <version>0.36.2</version>
-		</dependency>
-		
-		<!-- SpringWeb模块 -->
-		<dependency>
-		    <groupId>org.springframework</groupId>
-		    <artifactId>spring-webmvc</artifactId>
-		</dependency>
-		
-		<!-- 通用工具-->
-		<dependency>
-		    <groupId>com.ruoyi</groupId>
-		    <artifactId>ruoyi-common</artifactId>
-		</dependency>
+        <!-- LangChain4j 核心 -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j</artifactId>
+            <version>0.36.2</version>
+        </dependency>
+
+        <!-- OpenAI 适配（DashScope / DeepSeek / OpenAI 均走此模块） -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-open-ai</artifactId>
+            <version>0.36.2</version>
+        </dependency>
+
+        <!-- Apache Tika 文档解析（PDF/Word/Excel 文本提取） -->
+        <dependency>
+            <groupId>org.apache.tika</groupId>
+            <artifactId>tika-core</artifactId>
+            <version>2.9.2</version>
+        </dependency>
+
+        <!-- SpringWeb模块 -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-webmvc</artifactId>
+        </dependency>
+
+        <!-- 通用工具 -->
+        <dependency>
+            <groupId>com.ruoyi</groupId>
+            <artifactId>ruoyi-common</artifactId>
+        </dependency>
 
     </dependencies>
 

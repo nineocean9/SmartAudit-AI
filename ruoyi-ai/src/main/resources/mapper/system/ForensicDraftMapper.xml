@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.ForensicDraftMapper">
+    <resultMap id="ForensicDraftResult" type="ForensicDraft">
+        <id property="id" column="id" />
+        <result property="projectId" column="project_id" />
+        <result property="issue" column="issue" />
+        <result property="basisIds" column="basis_ids" />
+        <result property="suggestion" column="suggestion" />
+        <result property="reviewStatus" column="review_status" />
+        <result property="reviewLog" column="review_log" />
+        <result property="createBy" column="create_by" />
+        <result property="createTime" column="create_time" />
+        <result property="updateBy" column="update_by" />
+        <result property="updateTime" column="update_time" />
+    </resultMap>
+    <select id="selectForensicDraftList" resultMap="ForensicDraftResult">
+        SELECT * FROM forensic_draft ORDER BY create_time DESC
+    </select>
+    <select id="selectForensicDraftById" resultMap="ForensicDraftResult">
+        SELECT * FROM forensic_draft WHERE id = #{id}
+    </select>
+    <insert id="insertForensicDraft" parameterType="ForensicDraft" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO forensic_draft(project_id, issue, basis_ids, suggestion, review_status, review_log, create_by, create_time)
+        VALUES (#{projectId}, #{issue}, #{basisIds}, #{suggestion}, 0, '', #{createBy}, now())
+    </insert>
+    <update id="updateForensicDraft" parameterType="ForensicDraft">
+        UPDATE forensic_draft SET issue=#{issue}, basis_ids=#{basisIds}, suggestion=#{suggestion}, review_status=#{reviewStatus}, review_log=#{reviewLog}, update_time=now() WHERE id=#{id}
+    </update>
+    <delete id="deleteForensicDraftByIds">
+        DELETE FROM forensic_draft WHERE id IN <foreach collection="array" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+</mapper>

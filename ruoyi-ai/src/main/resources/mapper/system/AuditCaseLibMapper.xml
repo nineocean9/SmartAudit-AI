@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.AuditCaseLibMapper">
+    <resultMap id="AuditCaseLibResult" type="AuditCaseLib">
+        <id property="id" column="id" />
+        <result property="caseTitle" column="case_title" />
+        <result property="caseContent" column="case_content" />
+        <result property="category" column="category" />
+        <result property="reference" column="reference" />
+        <result property="createTime" column="create_time" />
+    </resultMap>
+    <select id="selectCaseLibList" resultMap="AuditCaseLibResult">
+        SELECT * FROM audit_case_lib ORDER BY create_time DESC
+    </select>
+    <select id="selectCaseLibById" resultMap="AuditCaseLibResult">
+        SELECT * FROM audit_case_lib WHERE id = #{id}
+    </select>
+    <insert id="insertCaseLib" parameterType="AuditCaseLib" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO audit_case_lib(case_title, case_content, category, reference, create_time)
+        VALUES (#{caseTitle}, #{caseContent}, #{category}, #{reference}, now())
+    </insert>
+    <update id="updateCaseLib" parameterType="AuditCaseLib">
+        UPDATE audit_case_lib SET case_title=#{caseTitle}, case_content=#{caseContent}, category=#{category}, reference=#{reference} WHERE id=#{id}
+    </update>
+    <delete id="deleteCaseLibByIds">
+        DELETE FROM audit_case_lib WHERE id IN <foreach collection="array" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+</mapper>

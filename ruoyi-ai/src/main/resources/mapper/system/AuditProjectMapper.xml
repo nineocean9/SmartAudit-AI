@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.AuditProjectMapper">
+
+    <resultMap id="ProjectResult" type="com.ruoyi.system.domain.AuditProject">
+        <id property="id" column="id" />
+        <result property="projectName" column="project_name" />
+        <result property="auditedUnit" column="audited_unit" />
+        <result property="auditType" column="audit_type" />
+        <result property="auditYear" column="audit_year" />
+        <result property="status" column="status" />
+        <result property="createTime" column="create_time" />
+    </resultMap>
+
+    <resultMap id="IssueWithRectResult" type="com.ruoyi.system.mapper.AuditProjectMapper$ProjectIssueWithRect">
+        <result property="issueId"       column="issue_id" />
+        <result property="issueDesc"     column="issue_desc" />
+        <result property="severity"      column="severity" />
+        <result property="rectMeasure"   column="rect_measure" />
+        <result property="rectStatus"    column="rect_status" />
+        <result property="finishDate"    column="finish_date" />
+    </resultMap>
+
+    <select id="searchProjects" resultMap="ProjectResult">
+        SELECT * FROM audit_project
+        WHERE project_name LIKE '%' || #{keyword} || '%'
+           OR audited_unit LIKE '%' || #{keyword} || '%'
+        ORDER BY audit_year DESC
+        LIMIT 10
+    </select>
+
+    <select id="searchProjectIssues" resultMap="IssueWithRectResult">
+        SELECT
+            i.id AS issue_id,
+            i.issue_desc,
+            i.severity,
+            r.measure AS rect_measure,
+            r.status AS rect_status,
+            r.finish_date
+        FROM audit_issue i
+        LEFT JOIN audit_rectification r ON r.issue_id = i.id
+        WHERE i.project_id = #{projectId}
+        ORDER BY i.severity DESC
+    </select>
+
+</mapper>

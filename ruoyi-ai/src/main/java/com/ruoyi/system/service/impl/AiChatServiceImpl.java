@@ -134,7 +134,7 @@ public class AiChatServiceImpl implements IAiChatService
     @Override
     public void chat(Long conversationId, String userInput, Long userId, SseEmitter emitter)
     {
-        // 1. 鉴权：会话必须属于当前用户
+        // 1. 鉴权
         AiConversation conv = aiChatMapper.selectConversationById(conversationId, userId);
         if (conv == null)
         {
@@ -142,29 +142,29 @@ public class AiChatServiceImpl implements IAiChatService
             return;
         }
 
-        // 2. 持久化用户消息（先存库，再发给 AI，保证消息不丢失）
+        // 2. 持久化用户消息
         com.ruoyi.system.domain.AiMessage userMsg = new com.ruoyi.system.domain.AiMessage();
         userMsg.setConversationId(conversationId);
         userMsg.setRole("user");
         userMsg.setContent(userInput);
         aiChatMapper.insertMessage(userMsg);
 
-        // 3. 首条消息自动命名会话标题（截取前15字 + 省略号）
+        // 3. 首条消息自动命名
         if ("新对话".equals(conv.getTitle()))
         {
             String autoTitle = userInput.length() > 15 ? userInput.substring(0, 15) + "…" : userInput;
             aiChatMapper.updateConversationTitle(conversationId, autoTitle, userId);
         }
 
-        // 4. 执行 RAG 管线：向量检索 → 召回依据 → 增强 Prompt
-        IAuditRagService.RagContext ragCtx = auditRagService.executeRag(userInput);
-        List<String> citedIds = new ArrayList<>();
-        long startTime = System.currentTimeMillis();
+        // 4. 执行 RAG 管线（向量检索 → 增强 Prompt）
+        final IAuditRagService.RagContext ragCtx = auditRagService.executeRag(userInput);
+        final List<String> citedIds = new ArrayList<>();
+        final long startTime = System.currentTimeMillis();
 
-        // 5. 构建完整的消息上下文（增强后的 SystemMessage + 历史消息）
+        // 5. 构建消息上下文（含召回依据的增强 System Prompt + 历史消息）
         List<ChatMessage> messages = buildMessages(conversationId, ragCtx.getAugmentedSystemPrompt());
 
-        // 6. 调用 LangChain4j 流式接口（回调在 LangChain4j 内部线程执行，不阻塞当前线程）
+        // 6. 流式调用
         StringBuilder fullReply = new StringBuilder();
 
         streamingModel.generate(messages, new StreamingResponseHandler<AiMessage>()
@@ -203,7 +203,7 @@ public class AiChatServiceImpl implements IAiChatService
                     }
                     aiChatMapper.insertMessage(aiMsg);
 
-                    // 8. 记录 AI 调用日志（审计专用）
+                    // 8. 记录调用日志
                     citedIds.addAll(auditRagService.extractCitedBasisIds(fullReply.toString()));
                     long elapsed = System.currentTimeMillis() - startTime;
                     auditRagService.logAiCall(userInput, fullReply.toString(),

@@ -66,13 +66,6 @@ public interface IAiChatService
 
     /**
      * 发送消息并以 SSE 流式返回 AI 回复
-     * 方法内部异步执行，通过 SseEmitter 逐 token 推送给前端
-     * 对话结束后自动将完整回复持久化到数据库
-     *
-     * @param conversationId 会话 ID
-     * @param userMessage    用户输入的消息内容
-     * @param userId         当前登录用户 ID（用于鉴权）
-     * @param emitter        SSE 发射器，由 Controller 创建并传入
      */
     void chat(Long conversationId, String userMessage, Long userId, SseEmitter emitter);
 }

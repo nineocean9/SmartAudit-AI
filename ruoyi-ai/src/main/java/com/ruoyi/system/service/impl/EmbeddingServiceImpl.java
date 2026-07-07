@@ -18,7 +18,8 @@ import java.util.*;
 
 /**
  * 向量化服务实现
- * 使用 DeepSeek Embedding API 生成向量，pgvector 存储和检索
+ * 支持 DashScope / OpenAI Embedding API，pgvector 存储和检索
+ * Embedding 不可用时自动降级，不影响主对话流程
  *
  * @author ruoyi
  */
@@ -26,12 +27,6 @@ import java.util.*;
 public class EmbeddingServiceImpl implements IEmbeddingService
 {
     private static final Logger log = LoggerFactory.getLogger(EmbeddingServiceImpl.class);
-
-    /** DeepSeek Embedding API 地址（OpenAI 兼容） */
-    private static final String EMBEDDING_URL = "https://api.deepseek.com/v1/embeddings";
-
-    /** 向量维度（deepseek-embedding 为 1024） */
-    private static final int EMBEDDING_DIM = 1024;
 
     /** 默认检索 Top-K */
     private static final int DEFAULT_TOP_K = 8;
@@ -48,21 +43,31 @@ public class EmbeddingServiceImpl implements IEmbeddingService
     @Override
     public float[] embed(String text)
     {
+        AiModelProperties.Embedding emb = modelProps.getEmbedding();
+        String apiKey = getEffectiveApiKey(emb);
+
+        // 未配置 API Key 则跳过向量化
+        if (apiKey == null || apiKey.isEmpty())
+        {
+            log.debug("Embedding API Key 未配置，跳过向量化");
+            return null;
+        }
+
         try
         {
-            // 构建 OpenAI-compatible Embedding 请求
+            String url = getEmbeddingUrl();
             Map<String, Object> reqBody = new LinkedHashMap<>();
-            reqBody.put("model", "deepseek-embedding");
+            reqBody.put("model", emb.getModel());
             reqBody.put("input", text);
 
             org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
-            headers.set("Authorization", "Bearer " + modelProps.getApiKey());
+            headers.set("Authorization", "Bearer " + apiKey);
             headers.set("Content-Type", "application/json");
 
             org.springframework.http.HttpEntity<Map<String, Object>> entity =
                     new org.springframework.http.HttpEntity<>(reqBody, headers);
 
-            String response = restTemplate.postForObject(EMBEDDING_URL, entity, String.class);
+            String response = restTemplate.postForObject(url, entity, String.class);
             JsonNode root = objectMapper.readTree(response);
             JsonNode embeddingNode = root.path("data").get(0).path("embedding");
 
@@ -71,12 +76,14 @@ public class EmbeddingServiceImpl implements IEmbeddingService
             {
                 vector[i] = embeddingNode.get(i).floatValue();
             }
+            log.debug("向量化成功: provider={}, model={}, dim={}", emb.getProvider(), emb.getModel(), vector.length);
             return vector;
         }
         catch (Exception e)
         {
-            log.error("调用 Embedding API 失败", e);
-            throw new RuntimeException("向量化失败: " + e.getMessage(), e);
+            log.warn("Embedding API 调用失败 ({} {}): {}。降级到关键词检索。",
+                    emb.getProvider(), emb.getModel(), e.getMessage());
+            return null;
         }
     }
 
@@ -85,8 +92,14 @@ public class EmbeddingServiceImpl implements IEmbeddingService
     {
         int k = topK > 0 ? topK : DEFAULT_TOP_K;
         float[] queryVector = embed(query);
-        String vectorStr = arrayToPgVector(queryVector);
 
+        // Embedding 不可用时返回空列表，让 AuditRagService 走关键词兜底
+        if (queryVector == null)
+        {
+            return Collections.emptyList();
+        }
+
+        String vectorStr = arrayToPgVector(queryVector);
         List<Long> basisIds = new ArrayList<>();
         String sql = "SELECT id FROM audit_basis WHERE embedding IS NOT NULL AND status = 1 "
                    + "ORDER BY embedding <=> ?::vector LIMIT ?";
@@ -116,7 +129,6 @@ public class EmbeddingServiceImpl implements IEmbeddingService
     {
         try (Connection conn = dataSource.getConnection())
         {
-            // 查询依据内容
             String selectSql = "SELECT title, content FROM audit_basis WHERE id = ?";
             String title = "", content = "";
             try (PreparedStatement ps = conn.prepareStatement(selectSql))
@@ -134,11 +146,10 @@ public class EmbeddingServiceImpl implements IEmbeddingService
 
             if (content == null) return;
 
-            // 生成向量（标题+正文）
             float[] vector = embed(title + " " + content);
-            String vectorStr = arrayToPgVector(vector);
+            if (vector == null) return; // Embedding 不可用则跳过
 
-            // 更新 pgvector 列
+            String vectorStr = arrayToPgVector(vector);
             String updateSql = "UPDATE audit_basis SET embedding = ?::vector WHERE id = ?";
             try (PreparedStatement ps = conn.prepareStatement(updateSql))
             {
@@ -147,15 +158,14 @@ public class EmbeddingServiceImpl implements IEmbeddingService
                 ps.executeUpdate();
             }
 
-            // 记录向量化日志
             String logSql = "INSERT INTO ai_embedding_log (basis_id, embedding_dim, model, tokens_used, update_time) "
-                          + "VALUES (?, ?, 'deepseek-embedding', ?, now()) "
-                          + "ON CONFLICT DO NOTHING";
+                          + "VALUES (?, ?, ?, ?, now())";
             try (PreparedStatement ps = conn.prepareStatement(logSql))
             {
                 ps.setLong(1, basisId);
-                ps.setInt(2, EMBEDDING_DIM);
-                ps.setInt(3, (title + content).length());
+                ps.setInt(2, vector.length);
+                ps.setString(3, modelProps.getEmbedding().getModel());
+                ps.setInt(4, (title + content).length());
                 ps.executeUpdate();
             }
         }
@@ -178,11 +188,7 @@ public class EmbeddingServiceImpl implements IEmbeddingService
             {
                 syncBasisEmbedding(rs.getLong("id"));
                 count++;
-                // 控制频率，避免 API 限流
-                if (count % 5 == 0)
-                {
-                    Thread.sleep(1000);
-                }
+                if (count % 5 == 0) Thread.sleep(1000);
             }
         }
         catch (Exception e)
@@ -193,9 +199,27 @@ public class EmbeddingServiceImpl implements IEmbeddingService
         return count;
     }
 
-    /**
-     * float[] → pgvector 兼容字符串格式: [0.1,0.2,...]
-     */
+    // ---- private ----
+
+    /** 获取 Embedding API 的 apiKey（embedding 单独配置则用它，否则复用 chat） */
+    private String getEffectiveApiKey(AiModelProperties.Embedding emb)
+    {
+        if (emb.getApiKey() != null && !emb.getApiKey().isEmpty())
+            return emb.getApiKey();
+        return modelProps.getApiKey();
+    }
+
+    /** 获取 Embedding API 地址（配置优先，兜底用 DashScope 默认） */
+    private String getEmbeddingUrl()
+    {
+        AiModelProperties.Embedding emb = modelProps.getEmbedding();
+        if (emb.getBaseUrl() != null && !emb.getBaseUrl().isEmpty())
+            return emb.getBaseUrl().replaceAll("/+$", "") + "/embeddings";
+        // 兜底：DashScope 默认地址
+        return "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings";
+    }
+
+    /** float[] → pgvector 字符串: [0.1,0.2,...] */
     private String arrayToPgVector(float[] array)
     {
         StringBuilder sb = new StringBuilder("[");

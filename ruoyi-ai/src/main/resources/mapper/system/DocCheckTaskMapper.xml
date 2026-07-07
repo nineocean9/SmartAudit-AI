@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.DocCheckTaskMapper">
+    <resultMap id="DocCheckTaskResult" type="DocCheckTask">
+        <id property="id" column="id" />
+        <result property="projectId" column="project_id" />
+        <result property="uploader" column="uploader" />
+        <result property="fileName" column="file_name" />
+        <result property="filePath" column="file_path" />
+        <result property="status" column="status" />
+        <result property="issuesJson" column="issues_json" />
+        <result property="createTime" column="create_time" />
+        <result property="finishTime" column="finish_time" />
+    </resultMap>
+    <select id="selectDocCheckTaskList" resultMap="DocCheckTaskResult">
+        SELECT * FROM doc_check_task ORDER BY create_time DESC
+    </select>
+    <select id="selectDocCheckTaskById" resultMap="DocCheckTaskResult">
+        SELECT * FROM doc_check_task WHERE id = #{id}
+    </select>
+    <insert id="insertDocCheckTask" parameterType="DocCheckTask" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO doc_check_task(project_id, uploader, file_name, file_path, status, issues_json, create_time)
+        VALUES (#{projectId}, #{uploader}, #{fileName}, #{filePath}, #{status}, #{issuesJson}, now())
+    </insert>
+    <update id="updateDocCheckTask" parameterType="DocCheckTask">
+        UPDATE doc_check_task SET status=#{status}, issues_json=#{issuesJson}, finish_time=now() WHERE id=#{id}
+    </update>
+    <delete id="deleteDocCheckTaskByIds">
+        DELETE FROM doc_check_task WHERE id IN <foreach collection="array" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+</mapper>

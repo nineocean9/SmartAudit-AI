@@ -46,6 +46,30 @@ public class AiModelProperties
     /** 系统提示词（可在配置中自定义） */
     private String systemPrompt = "你是一个专业、友好的 AI 助手，请用中文回答问题。";
 
+    /** 向量化（Embedding）配置 */
+    private Embedding embedding = new Embedding();
+
+    public static class Embedding
+    {
+        /** 提供商：dashscope | openai */
+        private String provider = "dashscope";
+        /** API Key（留空复用 chat api-key） */
+        private String apiKey;
+        /** 模型名 */
+        private String model = "text-embedding-v4";
+        /** Embedding API base URL */
+        private String baseUrl;
+
+        public String getProvider() { return provider; }
+        public void setProvider(String provider) { this.provider = provider; }
+        public String getApiKey() { return apiKey; }
+        public void setApiKey(String apiKey) { this.apiKey = apiKey; }
+        public String getModel() { return model; }
+        public void setModel(String model) { this.model = model; }
+        public String getBaseUrl() { return baseUrl; }
+        public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
+    }
+
     public String getProvider()
     {
         return provider;
@@ -124,5 +148,15 @@ public class AiModelProperties
     public void setSystemPrompt(String systemPrompt)
     {
         this.systemPrompt = systemPrompt;
+    }
+
+    public Embedding getEmbedding()
+    {
+        return embedding;
+    }
+
+    public void setEmbedding(Embedding embedding)
+    {
+        this.embedding = embedding;
     }
 }

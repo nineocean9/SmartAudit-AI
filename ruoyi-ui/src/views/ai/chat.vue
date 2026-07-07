@@ -138,6 +138,21 @@
 
       <!-- 输入区域 -->
       <div v-show="currentConvId" class="input-area">
+        <!-- 快捷按钮栏 -->
+        <div class="shortcut-bar">
+          <el-button size="small" class="shortcut-btn" @click="quickAction('上传文档')">
+            <el-icon><Upload /></el-icon>上传文档
+          </el-button>
+          <el-button size="small" class="shortcut-btn" @click="quickAction('取证单')">
+            <el-icon><Document /></el-icon>生成取证单
+          </el-button>
+          <el-button size="small" class="shortcut-btn" @click="quickAction('风险分析')">
+            <el-icon><Warning /></el-icon>风险分析
+          </el-button>
+          <el-button size="small" class="shortcut-btn" @click="quickAction('数据分析')">
+            <el-icon><DataAnalysis /></el-icon>数据分析
+          </el-button>
+        </div>
         <div class="input-box" :class="{ focused: inputFocused }">
           <el-input
             v-model="inputText"
@@ -200,7 +215,7 @@ import { ref, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   EditPen, ChatDotRound, Edit, Delete, Loading,
-  Warning, MagicStick, Cpu, DocumentChecked
+  Warning, MagicStick, Cpu, DocumentChecked, Upload, Document, DataAnalysis
 } from '@element-plus/icons-vue'
 import { getToken } from '@/utils/auth'
 import {
@@ -469,6 +484,30 @@ function abortStream() {
     currentReader = null
   }
   isStreaming.value = false
+}
+
+// 快捷按钮：填入预设 Prompt
+function quickAction(type) {
+  if (type === '上传文档') {
+    const fileInput = document.createElement('input')
+    fileInput.type = 'file'
+    fileInput.accept = '.txt,.pdf,.doc,.docx,.xlsx,.xls'
+    fileInput.onchange = (e) => {
+      const file = e.target.files[0]
+      if (!file) return
+      inputText.value = `请帮我分析以下文件内容是否符合相关审计规定：\n文件名：${file.name}\n（请先上传文件，再将文件内容粘贴至此）`
+      focusInput()
+    }
+    fileInput.click()
+    return
+  }
+  const prompts = {
+    '取证单': '请生成一份关于【请填写审计问题】的标准化审计取证单，包含问题描述、引用依据、结论和整改建议。',
+    '风险分析': '请分析以下业务数据中存在的风险点，按高风险、中风险、低风险分类列出，并给出相应的审计建议。\n',
+    '数据分析': '请分析：统计采购超50万无招标项目'
+  }
+  inputText.value = prompts[type] || ''
+  focusInput()
 }
 
 // ──────────────────────────────────────────
@@ -896,6 +935,28 @@ function focusInput() {
   border: none;
   border-top: 1px solid #ebeef5;
   margin: 10px 0;
+}
+
+/* ===== 快捷按钮栏 ===== */
+.shortcut-bar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+  padding: 0 2px;
+}
+.shortcut-btn {
+  font-size: 12px !important;
+  border-radius: 8px !important;
+  background: #f0f5ff !important;
+  border-color: #d6e4ff !important;
+  color: #409eff !important;
+  gap: 4px !important;
+  transition: all 0.2s !important;
+}
+.shortcut-btn:hover {
+  background: #d9ecff !important;
+  border-color: #a6c8ff !important;
+  transform: translateY(-1px);
 }
 
 /* ===== 输入区域 ===== */

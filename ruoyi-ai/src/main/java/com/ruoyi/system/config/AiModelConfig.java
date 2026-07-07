@@ -31,8 +31,8 @@ public class AiModelConfig
     // DashScope OpenAI 兼容接口地址
     private static final String DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1";
 
-    // DeepSeek OpenAI 兼容接口地址
-    private static final String DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1";
+    // DeepSeek OpenAI 兼容接口地址（通过 OpenCode Go 代理）
+    private static final String DEEPSEEK_BASE_URL = "https://opencode.ai/zen/go/v1";
 
     @Autowired
     private AiModelProperties props;

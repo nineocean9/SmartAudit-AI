@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.AuditRiskCaseMapper">
+    <resultMap id="AuditRiskCaseResult" type="AuditRiskCase">
+        <id property="id" column="id" />
+        <result property="riskName" column="risk_name" />
+        <result property="riskDesc" column="risk_desc" />
+        <result property="basisIds" column="basis_ids" />
+        <result property="scenario" column="scenario" />
+        <result property="createTime" column="create_time" />
+    </resultMap>
+    <select id="selectRiskCaseList" resultMap="AuditRiskCaseResult">
+        SELECT * FROM audit_risk_case ORDER BY create_time DESC
+    </select>
+    <select id="selectRiskCaseById" resultMap="AuditRiskCaseResult">
+        SELECT * FROM audit_risk_case WHERE id = #{id}
+    </select>
+    <insert id="insertRiskCase" parameterType="AuditRiskCase" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO audit_risk_case(risk_name, risk_desc, basis_ids, scenario, create_time)
+        VALUES (#{riskName}, #{riskDesc}, #{basisIds}, #{scenario}, now())
+    </insert>
+    <update id="updateRiskCase" parameterType="AuditRiskCase">
+        UPDATE audit_risk_case SET risk_name=#{riskName}, risk_desc=#{riskDesc}, basis_ids=#{basisIds}, scenario=#{scenario} WHERE id=#{id}
+    </update>
+    <delete id="deleteRiskCaseByIds">
+        DELETE FROM audit_risk_case WHERE id IN <foreach collection="array" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+</mapper>
