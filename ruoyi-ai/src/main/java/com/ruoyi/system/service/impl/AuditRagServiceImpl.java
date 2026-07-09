@@ -8,6 +8,7 @@ import com.ruoyi.system.mapper.AuditProjectMapper;
 import com.ruoyi.system.service.IAiDataAnalyzeService;
 import com.ruoyi.system.service.IAuditRagService;
 import com.ruoyi.system.service.IEmbeddingService;
+import com.ruoyi.system.service.IKnowledgeManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -58,6 +59,9 @@ public class AuditRagServiceImpl implements IAuditRagService
     private AuditProjectMapper auditProjectMapper;
 
     @Autowired
+    private IKnowledgeManager knowledgeManager;
+
+    @Autowired
     private DataSource dataSource;
 
     /** 审计项目（演示数据） */
@@ -81,30 +85,48 @@ public class AuditRagServiceImpl implements IAuditRagService
         ctx.userQuery = userQuery;
         log.info("意图分类: {} -> {}", userQuery.substring(0, Math.min(30, userQuery.length())), ctx.intent);
 
-        // Step 2: 向量检索召回 Top-8 依据
-        List<Long> basisIds = embeddingService.searchSimilar(userQuery, 8);
+        // Step 2: 搜索所有知识库
+        Set<IKnowledgeManager.KnowledgeSource> sources = Set.of(
+                IKnowledgeManager.KnowledgeSource.POLICY,
+                IKnowledgeManager.KnowledgeSource.PROJECT,
+                IKnowledgeManager.KnowledgeSource.TEMP);
+        List<IKnowledgeManager.SearchResult> allResults = knowledgeManager.search(
+                userQuery, sources, null, null, 8);
+
+        // 拆分结果
         ctx.recalledBasis = new ArrayList<>();
-        if (basisIds != null && !basisIds.isEmpty())
+        List<String> projectChunks = new ArrayList<>();
+        List<String> tempChunks = new ArrayList<>();
+
+        if (allResults != null)
         {
-            for (Long id : basisIds)
+            for (IKnowledgeManager.SearchResult sr : allResults)
             {
-                AuditBasis b = auditBasisMapper.selectAuditBasisById(id);
-                if (b != null)
+                switch (sr.getSource())
                 {
-                    ctx.recalledBasis.add(b);
+                    case POLICY:
+                        if (sr.getMetadata() != null && sr.getMetadata().containsKey("basisId"))
+                        {
+                            Long basisId = ((Number) sr.getMetadata().get("basisId")).longValue();
+                            AuditBasis b = auditBasisMapper.selectAuditBasisById(basisId);
+                            if (b != null) ctx.recalledBasis.add(b);
+                        }
+                        break;
+                    case PROJECT:
+                        projectChunks.add(sr.getContent());
+                        break;
+                    case TEMP:
+                        tempChunks.add(sr.getContent());
+                        break;
                 }
             }
-            log.info("向量检索召回 {} 条依据", ctx.recalledBasis.size());
-        }
-        else
-        {
-            log.info("向量检索未召回依据，回到关键词匹配兜底");
-            ctx.recalledBasis = auditBasisMapper.searchByKeyword(userQuery, null);
+            log.info("多源检索完成: 法规{}条, 项目{}chunk, 临时{}chunk",
+                    ctx.recalledBasis.size(), projectChunks.size(), tempChunks.size());
         }
 
-        // Step 3: 项目信息检索
-        String unitName = extractUnitName(userQuery);
+        // Step 3: 项目信息检索（关键词匹配）
         analysisResult = null;
+        String unitName = extractUnitName(userQuery);
         if (unitName != null)
         {
             matchedProjects = auditProjectMapper.searchProjects(unitName);
@@ -124,26 +146,9 @@ public class AuditRagServiceImpl implements IAuditRagService
             }
         }
 
-        // Step 4: 数据分析（检测到分析指令时自动执行）
-        if (userQuery.contains("分析") || userQuery.contains("统计") || userQuery.contains("趋势"))
-        {
-            try
-            {
-                var result = dataAnalyzeService.analyze(userQuery);
-                if (result.detailLines != null && !result.detailLines.isEmpty() && !"请重新描述分析指令".equals(result.detailLines.get(0)))
-                {
-                    analysisResult = result.summary;
-                    log.info("数据分析完成，获取到 {} 条结果", result.detailLines.size());
-                }
-            }
-            catch (Exception e)
-            {
-                log.warn("数据分析异常（不影响主流程）", e);
-            }
-        }
-
         // Step 5: 拼装增强后的 System Prompt
-        ctx.augmentedSystemPrompt = buildAugmentedPrompt(ctx);
+        ctx.augmentedSystemPrompt = buildAugmentedPrompt(ctx, "general", null,
+                projectChunks, tempChunks, allResults);
 
         return ctx;
     }
@@ -216,17 +221,62 @@ public class AuditRagServiceImpl implements IAuditRagService
     }
 
     /**
-     * 拼装增强后的 System Prompt（基础审计角色 + 召回依据）
+     * 拼装增强后的 System Prompt（支持 workspace 分角色）
      */
     private String buildAugmentedPrompt(RagContext ctx)
     {
+        return buildAugmentedPrompt(ctx, "policy", null, List.of(), List.of(), null);
+    }
+
+    private String buildAugmentedPrompt(RagContext ctx, String workspaceMode, Long projectId,
+                                        List<String> projectChunks, List<String> tempChunks,
+                                        List<IKnowledgeManager.SearchResult> allResults)
+    {
         StringBuilder sb = new StringBuilder();
+
+        // 直接使用 systemPrompt（通用 AI 助手角色）
         sb.append(modelProps.getSystemPrompt());
+        sb.append("\n\n");
+
+        // 追加工程模式说明
+        switch (workspaceMode)
+        {
+            case "project":
+                sb.append("## 工作模式：项目助手\n");
+                if (matchedProjects != null && !matchedProjects.isEmpty())
+                {
+                    AuditProject p = matchedProjects.get(0);
+                    sb.append("当前项目：").append(p.getProjectName())
+                      .append("（").append(p.getAuditedUnit() != null ? p.getAuditedUnit() : "")
+                      .append(p.getAuditType() != null ? "，".concat(p.getAuditType()) : "")
+                      .append("）\n");
+                }
+                else
+                {
+                    sb.append("已检索所有项目知识库资料，请基于提供的内容回答问题。\n");
+                }
+                sb.append("请基于提供的项目资料回答问题，引用资料时注明来源文档名。\n\n");
+                break;
+            case "data":
+                sb.append("## 工作模式：数据分析助手\n");
+                sb.append("请基于提供的数据进行分析，输出：总体情况 → 异常统计 → 风险提示 → 建议\n\n");
+                break;
+            default:
+                // general 模式（合并后默认）
+                if (matchedProjects != null && !matchedProjects.isEmpty())
+                {
+                    sb.append("## 当前项目\n");
+                    AuditProject p = matchedProjects.get(0);
+                    sb.append(p.getProjectName()).append("（").append(p.getAuditedUnit())
+                      .append("，").append(p.getAuditType()).append("）\n\n");
+                }
+                break;
+        }
 
         // 追加召回的审计依据
         if (ctx.recalledBasis != null && !ctx.recalledBasis.isEmpty())
         {
-            sb.append("\n\n## 当前可参考的审计依据（请优先引用）\n\n");
+            sb.append("## 当前可参考的审计依据（请优先引用）\n\n");
             int idx = 1;
             for (AuditBasis b : ctx.recalledBasis)
             {
@@ -240,17 +290,40 @@ public class AuditRagServiceImpl implements IAuditRagService
                 idx++;
             }
             sb.append("---\n");
-            sb.append("回答时请引用以上依据，格式：【依据:xxx】。如果以上依据不足以回答问题，请明确说明\"建议人工复核，依据不足\"。\n");
-        }
-        else
-        {
-            sb.append("\n\n> 注意：未检索到相关审计依据，请如实告知用户并建议人工复核。\n");
+            sb.append("回答时请引用以上依据，格式：【依据:xxx】。");
+            sb.append("如果以上依据不足以回答问题，请明确说明\"建议人工复核，依据不足\"。\n");
         }
 
-        // 追加审计项目数据（如有匹配）
+        // 追加项目知识库检索结果
+        if (projectChunks != null && !projectChunks.isEmpty())
+        {
+            sb.append("\n## 项目知识库相关资料\n\n");
+            int idx = 1;
+            for (String chunk : projectChunks)
+            {
+                sb.append("> ").append(truncateText(chunk, 500)).append("\n\n");
+                idx++;
+                if (idx > 5) break; // 最多5条
+            }
+            sb.append("---\n");
+        }
+
+        // 追加临时工作区检索结果
+        if (tempChunks != null && !tempChunks.isEmpty())
+        {
+            sb.append("\n## 临时上传资料\n\n");
+            for (String chunk : tempChunks)
+            {
+                sb.append("> ").append(truncateText(chunk, 500)).append("\n\n");
+            }
+            sb.append("**注意：以上资料为临时资料。**\n");
+            sb.append("---\n");
+        }
+
+        // 追加审计项目结构化数据
         if (matchedProjects != null && !matchedProjects.isEmpty())
         {
-            sb.append("\n\n## 当前查询到的审计项目数据\n\n");
+            sb.append("\n## 当前查询到的审计项目数据\n\n");
             for (AuditProject p : matchedProjects)
             {
                 String statusLabel = switch (p.getStatus()) {
@@ -295,15 +368,30 @@ public class AuditRagServiceImpl implements IAuditRagService
             }
         }
 
-        // 追加数据分析结果（如有）
+        // 追加数据分析结果
         if (analysisResult != null && !analysisResult.isEmpty())
         {
-            sb.append("\n\n## 数据分析结果\n\n").append(analysisResult).append("\n");
+            sb.append("\n## 数据分析结果\n\n").append(analysisResult).append("\n");
             sb.append("请基于以上数据进行分析解读，给出审计建议。\n");
+        }
+
+        if (ctx.recalledBasis.isEmpty()
+                && (projectChunks == null || projectChunks.isEmpty())
+                && (tempChunks == null || tempChunks.isEmpty())
+                && (matchedProjects == null || matchedProjects.isEmpty()))
+        {
+            sb.append("\n> 注意：未检索到任何相关资料，请如实告知用户并建议人工核查。\n");
         }
 
         return sb.toString();
     }
+
+    private String truncateText(String text, int maxLen)
+    {
+        if (text == null) return "";
+        return text.length() <= maxLen ? text : text.substring(0, maxLen) + "...";
+    }
+
 
     /**
      * 从查询中提取被审单位名

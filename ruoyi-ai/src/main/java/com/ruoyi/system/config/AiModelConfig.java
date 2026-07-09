@@ -6,7 +6,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.chat.StreamingChatLanguageModel;
+import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 
 /**
@@ -17,7 +19,7 @@ import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
  *
  * 支持的 provider：
  *   dashscope  —— 阿里云通义千问（OpenAI 兼容接口）
- *   openai     —— OpenAI 官方
+ *   openai     —— OpenAI Mimo官方
  *   deepseek   —— DeepSeek（OpenAI 兼容接口）
  *   ollama     —— 本地 Ollama（完全免费）
  *   
@@ -34,8 +36,58 @@ public class AiModelConfig
     // DeepSeek OpenAI 兼容接口地址（通过 OpenCode Go 代理）
     private static final String DEEPSEEK_BASE_URL = "https://opencode.ai/zen/go/v1";
 
+    // 小米 MiMo OpenAI 兼容接口地址
+    private static final String MIMO_BASE_URL = "https://api.xiaomimimo.com/v1";
+
     @Autowired
     private AiModelProperties props;
+
+    @Bean
+    public ChatLanguageModel chatLanguageModel()
+    {
+        String provider = props.getProvider();
+        switch (provider.toLowerCase())
+        {
+            case "dashscope":
+                return OpenAiChatModel.builder()
+                        .baseUrl(DASHSCOPE_BASE_URL)
+                        .apiKey(props.getApiKey())
+                        .modelName(props.getModelName())
+                        .maxTokens(props.getMaxTokens())
+                        .temperature(props.getTemperature())
+                        .timeout(Duration.ofSeconds(120))
+                        .build();
+            case "openai":
+                return OpenAiChatModel.builder()
+                        .baseUrl(props.getBaseUrl())
+                        .apiKey(props.getApiKey())
+                        .modelName(props.getModelName())
+                        .maxTokens(props.getMaxTokens())
+                        .temperature(props.getTemperature())
+                        .timeout(Duration.ofSeconds(120))
+                        .build();
+            case "mimo":
+                return OpenAiChatModel.builder()
+                        .baseUrl(MIMO_BASE_URL)
+                        .apiKey(props.getApiKey())
+                        .modelName(props.getModelName())
+                        .maxTokens(props.getMaxTokens())
+                        .temperature(props.getTemperature())
+                        .timeout(Duration.ofSeconds(120))
+                        .build();
+            case "deepseek":
+                return OpenAiChatModel.builder()
+                        .baseUrl(DEEPSEEK_BASE_URL)
+                        .apiKey(props.getApiKey())
+                        .modelName(props.getModelName())
+                        .maxTokens(props.getMaxTokens())
+                        .temperature(props.getTemperature())
+                        .timeout(Duration.ofSeconds(120))
+                        .build();
+            default:
+                throw new IllegalArgumentException("不支持的 AI provider: " + provider);
+        }
+    }
 
     @Bean
     public StreamingChatLanguageModel streamingChatLanguageModel()
@@ -56,9 +108,21 @@ public class AiModelConfig
                         .timeout(Duration.ofSeconds(120))
                         .build();
 
-            // ---- OpenAI 官方 ----
+            // ---- OpenAI 官方 / 兼容接口 ----
             case "openai":
                 return OpenAiStreamingChatModel.builder()
+                        .baseUrl(props.getBaseUrl())
+                        .apiKey(props.getApiKey())
+                        .modelName(props.getModelName())
+                        .maxTokens(props.getMaxTokens())
+                        .temperature(props.getTemperature())
+                        .timeout(Duration.ofSeconds(120))
+                        .build();
+
+            // ---- 小米 MiMo ----
+            case "mimo":
+                return OpenAiStreamingChatModel.builder()
+                        .baseUrl(MIMO_BASE_URL)
                         .apiKey(props.getApiKey())
                         .modelName(props.getModelName())
                         .maxTokens(props.getMaxTokens())
@@ -89,7 +153,7 @@ public class AiModelConfig
             default:
                 throw new IllegalArgumentException(
                         "不支持的 AI provider: " + provider
-                        + "，可选值: dashscope / openai / deepseek / ollama");
+                        + "，可选值: dashscope / openai / mimo / deepseek / ollama");
         }
     }
 }

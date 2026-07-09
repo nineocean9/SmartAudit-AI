@@ -1,19 +1,15 @@
 package com.ruoyi.system.service.impl;
 
-import java.util.ArrayList;
-import java.util.List;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.system.config.AiModelProperties;
 import com.ruoyi.system.domain.AiConversation;
+import com.ruoyi.system.domain.ChatTask;
 import com.ruoyi.system.mapper.AiChatMapper;
-import com.ruoyi.system.mapper.AuditBasisMapper;
 import com.ruoyi.system.service.IAiChatService;
+import com.ruoyi.system.service.IAiDataAnalyzeService;
 import com.ruoyi.system.service.IAuditRagService;
+import com.ruoyi.system.service.IChatTaskParserService;
+import com.ruoyi.system.service.IProjectDocService;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
@@ -21,13 +17,24 @@ import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.StreamingResponseHandler;
 import dev.langchain4j.model.chat.StreamingChatLanguageModel;
 import dev.langchain4j.model.output.Response;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 /**
- * AI 对话 Service 实现类 —— 基于 LangChain4j
+ * AI 对话 Service 实现类
  *
- * 核心设计思路： 业务代码只依赖 LangChain4j 的 StreamingChatLanguageModel 接口， 不感知底层是哪个厂商的模型。 切换模型（通义千问 / DeepSeek / OpenAI / 本地
- * Ollama） 只需修改 application.yml 中的 ai.model.provider，本类代码零改动。
- * 
+ * 当前版本：
+ * 1. 统一聊天入口
+ * 2. ChatTaskParser 先解析任务
+ * 3. 按 taskType 分流到 项目列表 / 项目资料阅读 / 项目分析 / 普通RAG问答
+ *
  * @author ruoyi
  */
 @Service
@@ -35,15 +42,9 @@ public class AiChatServiceImpl implements IAiChatService
 {
     private static final Logger log = LoggerFactory.getLogger(AiChatServiceImpl.class);
 
-    /**
-     * 流式聊天语言模型
-     * 由 AiModelConfig 工厂 Bean 根据 application.yml 中的 provider 配置动态注入，
-     * 可能是 OpenAiStreamingChatModel / OllamaStreamingChatModel 等具体实现
-     */
     @Autowired
     private StreamingChatLanguageModel streamingModel;
 
-    /** AI 模型配置属性（模型名称、温度、最大 Token、系统提示词等） */
     @Autowired
     private AiModelProperties modelProps;
 
@@ -51,18 +52,21 @@ public class AiChatServiceImpl implements IAiChatService
     private IAuditRagService auditRagService;
 
     @Autowired
-    private AiChatMapper aiChatMapper;
+    private IAiDataAnalyzeService dataAnalyzeService;
 
     @Autowired
-    private AuditBasisMapper auditBasisMapper;
+    private IChatTaskParserService chatTaskParserService;
+
+    @Autowired
+    private IProjectDocService projectDocService;
+
+    @Autowired
+    private AiChatMapper aiChatMapper;
 
     // ----------------------------------------------------------------
     // 会话管理
     // ----------------------------------------------------------------
 
-    /**
-     * 新建会话 model 参数为空时，取 application.yml 中配置的默认模型名
-     */
     @Override
     public AiConversation createConversation(Long userId, String model)
     {
@@ -79,14 +83,9 @@ public class AiChatServiceImpl implements IAiChatService
     public List<AiConversation> listConversations(Long userId)
     {
         List<AiConversation> list = aiChatMapper.selectConversationsByUserId(userId);
-        // 防御性处理：MyBatis 查无数据时可能返回 null，统一转为空列表
         return list != null ? list : new ArrayList<>();
     }
 
-    /**
-     * 查询会话消息
-     * 先鉴权（校验会话是否属于当前用户），再查消息，防止越权访问
-     */
     @Override
     public List<com.ruoyi.system.domain.AiMessage> listMessages(Long conversationId, Long userId)
     {
@@ -104,9 +103,6 @@ public class AiChatServiceImpl implements IAiChatService
         return aiChatMapper.updateConversationTitle(id, title, userId);
     }
 
-    /**
-     * 删除会话 先物理删除该会话下所有消息，再逻辑删除会话本身
-     */
     @Override
     public int deleteConversation(Long id, Long userId)
     {
@@ -115,24 +111,11 @@ public class AiChatServiceImpl implements IAiChatService
     }
 
     // ----------------------------------------------------------------
-    // 核心：LangChain4j 流式对话
+    // 核心：流式对话
     // ----------------------------------------------------------------
 
-    /**
-     * 发送消息，流式返回 AI 回复
-     *
-     * 完整流程：
-     *   1. 鉴权 —— 校验会话归属
-     *   2. 持久化用户消息
-     *   3. 首条消息自动命名会话标题
-     *   4. RAG管线 —— 向量检索召回依据 → 增强System Prompt
-     *   5. 加载历史消息 + 增强Prompt → 构建 LangChain4j 消息列表
-     *   6. 调用流式模型，逐 token 通过 SSE 推送给前端
-     *   7. 流式结束后持久化完整 AI 回复及 Token 消耗
-     *   8. 提取引用的依据编号 → 写入 ai_call_log 审计日志
-     */
     @Override
-    public void chat(Long conversationId, String userInput, Long userId, SseEmitter emitter)
+    public void chat(Long conversationId, String userInput, Long userId, String username, SseEmitter emitter)
     {
         // 1. 鉴权
         AiConversation conv = aiChatMapper.selectConversationById(conversationId, userId);
@@ -156,23 +139,188 @@ public class AiChatServiceImpl implements IAiChatService
             aiChatMapper.updateConversationTitle(conversationId, autoTitle, userId);
         }
 
-        // 4. 执行 RAG 管线（向量检索 → 增强 Prompt）
+        // 4. AI 先解析任务
+        List<com.ruoyi.system.domain.AiMessage> history = aiChatMapper.selectMessagesByConversationId(conversationId);
+        ChatTask task = chatTaskParserService.parse(userInput, history);
+        String taskType = task != null && task.getTaskType() != null ? task.getTaskType() : "QA";
+        log.info("聊天任务解析: input='{}' -> taskType={}, projectName={}, keyword={}, needChart={}",
+                userInput,
+                taskType,
+                task != null ? task.getProjectName() : null,
+                task != null ? task.getKeyword() : null,
+                task != null ? task.getNeedChart() : null);
+
+        // 5. 分流执行
+        switch (taskType)
+        {
+            case "LIST_PROJECTS":
+                handleListProjects(conversationId, emitter);
+                return;
+            case "READ_PROJECT":
+                handleReadProject(conversationId, task, emitter);
+                return;
+            case "ANALYZE_PROJECT":
+                handleAnalyzeProject(conversationId, task, username, emitter);
+                return;
+            default:
+                handleNormalChat(conversationId, userInput, emitter);
+        }
+    }
+
+    /**
+     * 列出项目库资料（泛问）
+     */
+    private void handleListProjects(Long conversationId, SseEmitter emitter)
+    {
+        try
+        {
+            List<com.ruoyi.system.domain.ProjectDocument> docs = projectDocService.listRecentDocs(10);
+            String summary;
+            if (docs == null || docs.isEmpty())
+            {
+                summary = "当前项目库中暂无资料。";
+            }
+            else
+            {
+                StringBuilder sb = new StringBuilder();
+                sb.append("当前项目库中包含以下资料：\n");
+                for (int i = 0; i < docs.size(); i++)
+                {
+                    var d = docs.get(i);
+                    sb.append(i + 1).append(". ")
+                      .append(d.getFileName())
+                      .append("（")
+                      .append(d.getDocType() != null ? d.getDocType() : "其他资料")
+                      .append("）\n");
+                }
+                summary = sb.toString();
+            }
+
+            persistAndSendAssistantMessage(conversationId, summary, emitter);
+        }
+        catch (Exception e)
+        {
+            log.error("项目列表返回失败", e);
+            persistAndSendAssistantMessage(conversationId, "⚠ 项目列表获取失败：" + e.getMessage(), emitter);
+        }
+    }
+
+    /**
+     * 读取某项目下资料清单
+     */
+    private void handleReadProject(Long conversationId, ChatTask task, SseEmitter emitter)
+    {
+        try
+        {
+            String projectName = task != null ? task.getProjectName() : null;
+            if (projectName == null || projectName.isBlank())
+            {
+                persistAndSendAssistantMessage(conversationId, "⚠ 无法识别要读取的项目名称。", emitter);
+                return;
+            }
+
+            List<com.ruoyi.system.domain.ProjectDocument> docs = projectDocService.listProjectDocsByProjectName(projectName);
+            String summary;
+            if (docs == null || docs.isEmpty())
+            {
+                summary = "当前项目库中未检索到与“" + projectName + "”相关的资料。";
+            }
+            else
+            {
+                StringBuilder sb = new StringBuilder();
+                sb.append(projectName).append(" 项目中包含以下资料：\n");
+                for (int i = 0; i < docs.size(); i++)
+                {
+                    var d = docs.get(i);
+                    sb.append(i + 1).append(". ")
+                      .append(d.getFileName())
+                      .append("（")
+                      .append(d.getDocType() != null ? d.getDocType() : "其他资料")
+                      .append("）\n");
+                }
+                summary = sb.toString();
+            }
+
+            persistAndSendAssistantMessage(conversationId, summary, emitter);
+        }
+        catch (Exception e)
+        {
+            log.error("项目资料读取失败", e);
+            persistAndSendAssistantMessage(conversationId, "⚠ 项目资料读取失败：" + e.getMessage(), emitter);
+        }
+    }
+
+    /**
+     * 按项目做分析并生成数据驾驶舱
+     */
+    private void handleAnalyzeProject(Long conversationId, ChatTask task, String username, SseEmitter emitter)
+    {
+        try
+        {
+            String projectName = task != null ? task.getProjectName() : null;
+            if (projectName == null || projectName.isBlank())
+            {
+                persistAndSendAssistantMessage(conversationId, "⚠ 无法识别要分析的项目名称。", emitter);
+                return;
+            }
+
+            String dataText = projectDocService.getMergedProjectTextByProjectName(projectName);
+            if (dataText == null || dataText.isBlank())
+            {
+                persistAndSendAssistantMessage(conversationId,
+                        "⚠ 项目库中未检索到与“" + projectName + "”相关的可分析资料。请先上传相关预算/收入/支出文件。",
+                        emitter);
+                return;
+            }
+
+            Map<String, Object> analysis = dataAnalyzeService.analyzeChart(
+                    dataText, projectName, projectName, null, "chat", username);
+            Object analysisId = analysis.get("analysisId");
+            String chatReply = "已为“" + projectName + "”生成数据驾驶舱，请点击下方链接查看完整图表与审计分析。";
+
+            com.ruoyi.system.domain.AiMessage aiMsg = new com.ruoyi.system.domain.AiMessage();
+            aiMsg.setConversationId(conversationId);
+            aiMsg.setRole("assistant");
+            aiMsg.setContent(chatReply + (analysisId != null ? "\n[dashboard:" + analysisId + "]" : ""));
+            aiChatMapper.insertMessage(aiMsg);
+
+            sendSse(emitter, "message", chatReply);
+            if (analysisId != null)
+            {
+                sendSse(emitter, "dashboard", String.valueOf(analysisId));
+            }
+            sendSse(emitter, "done", "[DONE]");
+            emitter.complete();
+        }
+        catch (Exception e)
+        {
+            log.error("项目分析失败", e);
+            persistAndSendAssistantMessage(conversationId, "⚠ 项目分析失败：" + e.getMessage(), emitter);
+        }
+    }
+
+    /**
+     * 普通 RAG 问答
+     */
+    private void handleNormalChat(Long conversationId, String userInput, SseEmitter emitter)
+    {
         final IAuditRagService.RagContext ragCtx = auditRagService.executeRag(userInput);
         final List<String> citedIds = new ArrayList<>();
         final long startTime = System.currentTimeMillis();
 
-        // 5. 构建消息上下文（含召回依据的增强 System Prompt + 历史消息）
         List<ChatMessage> messages = buildMessages(conversationId, ragCtx.getAugmentedSystemPrompt());
 
-        // 6. 流式调用
+        int totalChars = 0;
+        for (ChatMessage cm : messages)
+        {
+            totalChars += cm.toString().length();
+        }
+        log.info("发送AI请求: msgCount={}, totalChars={}, queryLen={}", messages.size(), totalChars, userInput.length());
+
         StringBuilder fullReply = new StringBuilder();
 
         streamingModel.generate(messages, new StreamingResponseHandler<AiMessage>()
         {
-            /**
-             * 每收到一个 token 片段时触发
-             * 累积到 fullReply 的同时，实时通过 SSE 推送给前端实现打字机效果
-             */
             @Override
             public void onNext(String token)
             {
@@ -180,21 +328,15 @@ public class AiChatServiceImpl implements IAiChatService
                 sendSse(emitter, "message", token);
             }
 
-            /**
-             * 流式输出全部完成时触发
-             * 将完整回复持久化到数据库，并通知前端对话结束
-             */
             @Override
             public void onComplete(Response<AiMessage> response)
             {
-                // 7. 持久化 AI 完整回复
                 if (fullReply.length() > 0)
                 {
                     com.ruoyi.system.domain.AiMessage aiMsg = new com.ruoyi.system.domain.AiMessage();
                     aiMsg.setConversationId(conversationId);
                     aiMsg.setRole("assistant");
                     aiMsg.setContent(fullReply.toString());
-                    // 记录本次对话消耗的 Token 总数（用于统计和计费）
                     int tokens = 0;
                     if (response.tokenUsage() != null)
                     {
@@ -203,28 +345,55 @@ public class AiChatServiceImpl implements IAiChatService
                     }
                     aiChatMapper.insertMessage(aiMsg);
 
-                    // 8. 记录调用日志
                     citedIds.addAll(auditRagService.extractCitedBasisIds(fullReply.toString()));
                     long elapsed = System.currentTimeMillis() - startTime;
                     auditRagService.logAiCall(userInput, fullReply.toString(),
                             ragCtx.getIntent(), citedIds, tokens, elapsed, 1);
                 }
-                // 通知前端流式结束，前端收到后关闭 EventSource
+
                 sendSse(emitter, "done", "[DONE]");
                 emitter.complete();
             }
 
-            /**
-             * 调用过程中发生异常时触发（网络超时、模型服务异常等）
-             */
             @Override
             public void onError(Throwable error)
             {
-                log.error("LangChain4j 流式调用异常", error);
-                sendSse(emitter, "error", "AI 服务异常：" + error.getMessage());
-                emitter.completeWithError(error);
+                log.error("LangChain4j 流式调用异常: {} (queryLen={})", error.getMessage(), userInput.length());
+
+                if (fullReply.length() > 0)
+                {
+                    com.ruoyi.system.domain.AiMessage aiMsg = new com.ruoyi.system.domain.AiMessage();
+                    aiMsg.setConversationId(conversationId);
+                    aiMsg.setRole("assistant");
+                    aiMsg.setContent(fullReply.toString() + "\n\n---\n*⚠ AI服务响应中断，以上为已生成的部分内容。请尝试缩短提问或刷新后重试。*");
+                    aiChatMapper.insertMessage(aiMsg);
+                    sendSse(emitter, "message", "\n\n---\n*⚠ AI服务响应中断，以上为已生成的部分内容。请尝试缩短提问或刷新后重试。*");
+                }
+                else
+                {
+                    String fallback = "⚠ AI 服务暂时不可用（" + error.getMessage() + "）。建议：\n"
+                            + "1. 缩短提问内容后重试\n"
+                            + "2. 检查网络连接\n"
+                            + "3. 联系管理员检查 API 配额";
+                    sendSse(emitter, "message", fallback);
+                }
+                sendSse(emitter, "done", "[DONE]");
+                emitter.complete();
             }
         });
+    }
+
+    private void persistAndSendAssistantMessage(Long conversationId, String content, SseEmitter emitter)
+    {
+        com.ruoyi.system.domain.AiMessage aiMsg = new com.ruoyi.system.domain.AiMessage();
+        aiMsg.setConversationId(conversationId);
+        aiMsg.setRole("assistant");
+        aiMsg.setContent(content);
+        aiChatMapper.insertMessage(aiMsg);
+
+        sendSse(emitter, "message", content);
+        sendSse(emitter, "done", "[DONE]");
+        emitter.complete();
     }
 
     // ----------------------------------------------------------------
@@ -233,26 +402,17 @@ public class AiChatServiceImpl implements IAiChatService
 
     /**
      * 构建发送给 AI 的完整消息列表
-     *
-     * 结构：[增强SystemMessage(含召回依据)] + [历史 user/assistant 消息（最近 N 条）]
-     *
-     * @param conversationId    会话 ID
-     * @param augmentedPrompt   RAG增强后的完整系统提示词（含召回依据）
-     * @return LangChain4j 格式的消息列表
      */
     private List<ChatMessage> buildMessages(Long conversationId, String augmentedPrompt)
     {
         List<com.ruoyi.system.domain.AiMessage> history = aiChatMapper.selectMessagesByConversationId(conversationId);
-
         List<ChatMessage> list = new ArrayList<>();
 
-        // 插入增强后的系统提示词（审计角色 + 召回依据）
         if (augmentedPrompt != null && !augmentedPrompt.isEmpty())
         {
             list.add(SystemMessage.from(augmentedPrompt));
         }
 
-        // 裁剪历史消息，只保留最近 maxHistoryMessages 条
         int max = modelProps.getMaxHistoryMessages();
         int start = Math.max(0, history.size() - max);
         for (int i = start; i < history.size(); i++)
@@ -264,7 +424,6 @@ public class AiChatServiceImpl implements IAiChatService
             }
             else
             {
-                // assistant 消息转为 LangChain4j 的 AiMessage 类型
                 list.add(AiMessage.from(m.getContent()));
             }
         }
@@ -272,12 +431,7 @@ public class AiChatServiceImpl implements IAiChatService
     }
 
     /**
-     * 向前端安全推送一条 SSE 事件
-     * 捕获异常防止因客户端断开连接而导致整个线程崩溃
-     *
-     * @param emitter SSE 发射器
-     * @param event   事件名称（message / done / error）
-     * @param data    事件数据
+     * 安全发送 SSE
      */
     private void sendSse(SseEmitter emitter, String event, String data)
     {

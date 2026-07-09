@@ -67,5 +67,5 @@ public interface IAiChatService
     /**
      * 发送消息并以 SSE 流式返回 AI 回复
      */
-    void chat(Long conversationId, String userMessage, Long userId, SseEmitter emitter);
+    void chat(Long conversationId, String userMessage, Long userId, String username, SseEmitter emitter);
 }

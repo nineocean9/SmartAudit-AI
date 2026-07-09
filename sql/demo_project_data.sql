@@ -59,6 +59,13 @@ INSERT INTO audit_project (project_name, audited_unit, audit_type, audit_year, s
 ('财务处2024年预算执行审计', '财务处', '专项审计', 2024, 1),
 ('图书馆2025年工程审计', '图书馆', '工程审计', 2025, 0);
 
+-- 关联项目到计划（建立 plan_id 关联）
+UPDATE audit_project SET plan_id = 1 WHERE id = 1;
+UPDATE audit_project SET plan_id = 2 WHERE id = 2;
+UPDATE audit_project SET plan_id = 3 WHERE id = 3;
+UPDATE audit_project SET plan_id = 4 WHERE id = 4;
+UPDATE audit_project SET plan_id = 5 WHERE id = 5;
+
 -- 问题（ID从1开始）
 INSERT INTO audit_issue (project_id, issue_desc, severity, basis_id) VALUES
 (1, '采购项目未按规定进行公开招标，涉及金额85万元', 3, 13),

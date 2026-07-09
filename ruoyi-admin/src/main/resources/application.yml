@@ -159,24 +159,25 @@ xss:
 ai:
   model:
     # ── 当前启用的提供商 ────────────────────────────────────────
-    # 可选值: dashscope | openai | deepseek | ollama
-    provider: deepseek
+    # 可选值: dashscope | openai | mimo | deepseek | ollama
+    provider: mimo
 
-    # ── API Key（dashscope / openai / deepseek 需要）────────────
-    api-key: your-deepseek-api-key
+    # ── API Key（dashscope / openai / mimo / deepseek 需要）────────────
+    api-key: sk-c4poed9pfc8is2egy36ywtvm5y2knsgv9iwwowgnf9g6iu2v
 
     # ── 模型名称 ────────────────────────────────────────────────
     # dashscope : qwen-turbo（快/便宜）| qwen-plus（均衡）| qwen-max（最强）
     # openai    : gpt-4o-mini | gpt-4o
-    # deepseek  : deepseek-chat | deepseek-reasoner
+    # mimo      : mimo-v2.5-pro
+    # deepseek  : deepseek-v4-flash | deepseek-reasoner
     # ollama    : qwen2.5 | llama3.2 | mistral（本地运行）
-    model-name: deepseek-v4-flash
+    model-name: mimo-v2.5-pro
 
-    # ── Ollama 专用（本地部署时填写）────────────────────────────
-    #base-url: http://localhost:11434
+    # ── OpenAI 兼容接口专用（openai provider 时填写）────────────
+    # base-url: https://api.openai.com/v1
 
     # ── 通用参数 ────────────────────────────────────────────────
-    max-tokens: 2048
+    max-tokens: 8192
     temperature: 0.7
     max-history-messages: 20
 
@@ -195,12 +196,33 @@ ai:
       - 严禁编造不存在的法规条款
       - 对于审计问题定性，使用规范的法律语言和审计专业术语
 
+    # ── 分角色系统提示词（对应 workspace 模式）──────────────────
+    system-prompts:
+      policy: |
+        你是高校审计法规助手。你的职责是：
+        1. 回答用户关于高校审计法规、制度、流程的问题，必须引用具体的审计依据
+        2. 回答格式：**结论**（1-2句话） → **依据**（格式：【依据:法规名 第X条】+原文摘要） → **建议**（操作建议）
+        3. 如果依据不足以回答问题，明确说明"建议人工复核，当前法规库中未查到明确规定"
+        4. 严禁编造不存在的法规条款
+      project: |
+        你是审计项目助手。你的职责是：
+        1. 基于提供的项目资料和项目结构化数据回答用户关于审计项目的问题
+        2. 回答时引用具体的资料来源（文档名/底稿名/报告名）
+        3. 如果用户问题超出了提供的项目资料范围，请明确告知，并在回复末尾加上 {{OUT_OF_SCOPE}} 标记
+        4. 能够综合分析项目的方案、底稿、报告、整改等各阶段资料
+      data: |
+        你是审计数据分析助手。你的职责是：
+        1. 基于用户上传的数据文件或系统数据进行统计分析
+        2. 输出结构化分析报告：**总体情况** → **异常统计** → **风险提示** → **审计建议**
+        3. 如果数据不足以分析，请明确说明需要哪些补充数据
+        4. 对异常数据要标注风险等级（高/中/低）
+
     # ── 向量化（Embedding）配置 ────────────────────────────────
     embedding:
       # 提供商: dashscope
       provider: dashscope
       # API Key（留空则复用 chat 的 api-key；百炼 API Key 以 sk- 开头）
-      api-key: your-bailian-api-key
+      api-key: sk-ws-H.RXEDPPD.MQnd.MEUCIQDVpWH8U9YOoESdI0Y26bMSNK3ZsiVVPuGneyIBEnNcSwIgC9-7Ay2EFlpZXt4bbnn-zxSGV4RWRKtIToXk8yJjZw8
       # 模型: text-embedding-v4(最新/1024维) | text-embedding-v3(1024维)
       model: text-embedding-v4
       # 百炼兼容接口地址（{WorkspaceId} 替换为你的业务空间ID）

@@ -67,6 +67,13 @@ public interface AiChatMapper
      */
     AiConversation selectConversationById(@Param("id") Long id, @Param("userId") Long userId);
 
+    /**
+     * 更新会话的工作上下文（workspace模式、关联项目、临时工作区）
+     */
+    int updateConversationContext(@Param("id") Long id, @Param("workspaceMode") String workspaceMode,
+                                  @Param("projectId") Long projectId,
+                                  @Param("tempSessionId") String tempSessionId);
+
     // ================================================================
     //  消息相关操作
     // ================================================================

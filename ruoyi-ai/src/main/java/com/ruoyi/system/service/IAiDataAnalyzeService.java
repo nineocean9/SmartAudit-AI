@@ -1,5 +1,6 @@
 package com.ruoyi.system.service;
 
+import com.ruoyi.common.core.page.TableDataInfo;
 import java.util.List;
 import java.util.Map;
 
@@ -19,8 +20,28 @@ public interface IAiDataAnalyzeService
 
     /**
      * 执行数据分析指令
-     * @param instruction 自然语言指令，如"统计采购超50万无招标项目"
-     * @return 结构化结果
      */
     AnalyzeResult analyze(String instruction);
+
+    /**
+     * AI 数据分析并生成图表
+     */
+    Map<String, Object> analyzeChart(String dataText, String instruction,
+                                     String projectName, String keyword,
+                                     String sourceType, String createBy);
+
+    /**
+     * 获取已保存的分析结果
+     */
+    Map<String, Object> getAnalysisResult(Long id);
+
+    /**
+     * 获取分析结果的 HTML 内容
+     */
+    String getAnalysisHtml(Long id);
+
+    /**
+     * 列出分析结果列表
+     */
+    TableDataInfo listAnalysisResults(String keyword, Integer pageNum, Integer pageSize);
 }

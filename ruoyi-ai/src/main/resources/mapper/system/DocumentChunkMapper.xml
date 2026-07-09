@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.ruoyi.system.mapper.DocumentChunkMapper">
+
+    <resultMap id="ChunkResult" type="com.ruoyi.system.domain.DocumentChunk">
+        <id     property="id"          column="id"            />
+        <result property="documentId"  column="document_id"   />
+        <result property="chunkIndex"  column="chunk_index"   />
+        <result property="content"     column="content"       />
+        <result property="tokenCount"  column="token_count"   />
+        <result property="createTime"  column="create_time"   />
+    </resultMap>
+
+    <insert id="insertChunk" parameterType="com.ruoyi.system.domain.DocumentChunk"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO document_chunk(document_id, chunk_index, content, token_count, create_time)
+        VALUES (#{documentId}, #{chunkIndex}, #{content}, #{tokenCount}, now())
+    </insert>
+
+    <select id="selectByDocumentId" resultMap="ChunkResult">
+        SELECT * FROM document_chunk
+        WHERE document_id = #{documentId}
+        ORDER BY chunk_index ASC
+    </select>
+
+    <delete id="deleteByDocumentId">
+        DELETE FROM document_chunk WHERE document_id = #{documentId}
+    </delete>
+
+    <select id="selectContentByProjectId" resultType="string">
+        SELECT dc.content FROM document_chunk dc
+        JOIN project_document pd ON pd.id = dc.document_id
+        WHERE pd.project_id = #{projectId} AND pd.status = 1
+        ORDER BY pd.id, dc.chunk_index
+    </select>
+
+    <delete id="deleteById">
+        DELETE FROM document_chunk WHERE id = #{id}
+    </delete>
+
+</mapper>

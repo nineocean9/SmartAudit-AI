@@ -1,5 +1,7 @@
 package com.ruoyi.system.config;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
@@ -15,7 +17,7 @@ public class AiModelProperties
 {
     /**
      * 当前启用的提供商
-     * 可选值: dashscope | openai | deepseek | ollama
+     * 可选值: dashscope | openai | deepseek | mimo | ollama
      */
     private String provider = "dashscope";
 
@@ -26,6 +28,7 @@ public class AiModelProperties
      * 模型名称
      *  - dashscope : qwen-turbo / qwen-plus / qwen-max
      *  - openai    : gpt-4o / gpt-4o-mini
+     *  - mimo      : mimo-v2.5-pro
      *  - deepseek  : deepseek-chat / deepseek-reasoner
      *  - ollama    : qwen2.5 / llama3.2 / mistral ...
      */
@@ -45,6 +48,9 @@ public class AiModelProperties
 
     /** 系统提示词（可在配置中自定义） */
     private String systemPrompt = "你是一个专业、友好的 AI 助手，请用中文回答问题。";
+
+    /** 分角色系统提示词 */
+    private Map<String, String> systemPrompts = new LinkedHashMap<>();
 
     /** 向量化（Embedding）配置 */
     private Embedding embedding = new Embedding();
@@ -148,6 +154,28 @@ public class AiModelProperties
     public void setSystemPrompt(String systemPrompt)
     {
         this.systemPrompt = systemPrompt;
+    }
+
+    public Map<String, String> getSystemPrompts()
+    {
+        return systemPrompts;
+    }
+
+    public void setSystemPrompts(Map<String, String> systemPrompts)
+    {
+        this.systemPrompts = systemPrompts;
+    }
+
+    /**
+     * 根据工作模式获取系统提示词
+     */
+    public String getSystemPromptForMode(String mode)
+    {
+        if (systemPrompts != null && systemPrompts.containsKey(mode))
+        {
+            return systemPrompts.get(mode);
+        }
+        return systemPrompt;
     }
 
     public Embedding getEmbedding()

@@ -44,7 +44,7 @@ public interface IAuditRagService
     /**
      * 执行 RAG 管线
      * @param userQuery 用户问题
-     * @return RAG 上下文（含增强后的 System Prompt 和召回依据列表）
+     * @return RAG 上下文
      */
     RagContext executeRag(String userQuery);
 

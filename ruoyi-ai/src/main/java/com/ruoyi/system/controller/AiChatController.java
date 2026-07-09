@@ -157,11 +157,13 @@ public class AiChatController extends BaseController
      */
     @GetMapping(value = "/stream", produces = "text/event-stream;charset=UTF-8")
     @ResponseBody
-    public SseEmitter stream(@RequestParam Long conversationId, @RequestParam String message)
+    public SseEmitter stream(@RequestParam Long conversationId,
+                             @RequestParam String message)
     {
         SseEmitter emitter = new SseEmitter(0L);
         Long userId = SecurityUtils.getUserId();
-        new Thread(() -> aiChatService.chat(conversationId, message, userId, emitter)).start();
+        String username = SecurityUtils.getUsername();
+        new Thread(() -> aiChatService.chat(conversationId, message, userId, username, emitter)).start();
         return emitter;
     }
 }

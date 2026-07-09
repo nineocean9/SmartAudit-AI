@@ -36,6 +36,15 @@ public class AiConversation extends BaseEntity
      */
     private Integer status;
 
+    /** 工作模式：general/policy/project/data */
+    private String workspaceMode;
+
+    /** 关联审计项目ID */
+    private Long projectId;
+
+    /** 临时工作区会话ID */
+    private String tempSessionId;
+
     public Long getId()
     {
         return id;
@@ -85,4 +94,13 @@ public class AiConversation extends BaseEntity
     {
         this.status = status;
     }
+
+    public String getWorkspaceMode() { return workspaceMode; }
+    public void setWorkspaceMode(String workspaceMode) { this.workspaceMode = workspaceMode; }
+
+    public Long getProjectId() { return projectId; }
+    public void setProjectId(Long projectId) { this.projectId = projectId; }
+
+    public String getTempSessionId() { return tempSessionId; }
+    public void setTempSessionId(String tempSessionId) { this.tempSessionId = tempSessionId; }
 }

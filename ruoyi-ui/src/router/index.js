@@ -48,6 +48,24 @@ export const constantRoutes = [
     hidden: true
   },
   {
+    path: '/404',
+    component: () => import('@/views/error/404'),
+    hidden: true
+  },
+  {
+    path: '/visualization/detail',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/ai/visualization/detail'),
+        name: 'VisualizationDetail',
+        meta: { title: '数据可视化详情' }
+      }
+    ]
+  },
+  {
     path: "/:pathMatch(.*)*",
     component: () => import('@/views/error/404'),
     hidden: true
@@ -161,6 +179,39 @@ export const dynamicRoutes = [
         component: () => import('@/views/tool/gen/editTable'),
         name: 'GenEdit',
         meta: { title: '修改生成配置', activeMenu: '/tool/gen' }
+      }
+    ]
+  },
+  {
+    path: '/visualization',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: 'index',
+        component: () => import('@/views/ai/visualization/index'),
+        name: 'VisualizationList',
+        meta: { title: '数据可视化' }
+      },
+      {
+        path: 'detail',
+        component: () => import('@/views/ai/visualization/detail'),
+        name: 'VisualizationDetail',
+        meta: { title: '数据可视化详情' }
+      }
+    ]
+  },
+  {
+    path: '/dashboard',
+    component: Layout,
+    hidden: true,
+    meta: { title: '数据分析仪表盘' },
+    children: [
+      {
+        path: 'index',
+        component: () => import('@/views/ai/dataDashboard'),
+        name: 'DataDashboard',
+        meta: { title: '数据分析仪表盘' }
       }
     ]
   }
