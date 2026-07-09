@@ -339,7 +339,10 @@ public class AiDataAnalyzeServiceImpl implements IAiDataAnalyzeService
                 if (rs.next())
                 {
                     String html = rs.getString("html_content");
-                    if (html != null && !html.isBlank()) return html;
+                    if (html != null && !html.isBlank())
+                    {
+                        return replaceCdnToLocal(html);
+                    }
 
                     // 回退：从 chart_data 生成 HTML（兼容旧记录）
                     String chartJson = rs.getString("chart_data");
@@ -509,6 +512,12 @@ public class AiDataAnalyzeServiceImpl implements IAiDataAnalyzeService
             log.error("更新分析结果失败", e);
             return 0;
         }
+    }
+
+    private String replaceCdnToLocal(String html)
+    {
+        return html.replace("https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js", "/static/js/echarts.min.js")
+                   .replace("https://cdn.bootcdn.net/ajax/libs/echarts/5.6.0/echarts.min.js", "/static/js/echarts.min.js");
     }
 
     private record AnalysisTemplate(String keyword, String sql, String label) {}
