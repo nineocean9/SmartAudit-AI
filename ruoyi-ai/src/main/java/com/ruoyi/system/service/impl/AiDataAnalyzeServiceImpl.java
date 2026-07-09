@@ -222,7 +222,7 @@ public class AiDataAnalyzeServiceImpl implements IAiDataAnalyzeService
             + "<meta charset='UTF-8'>\n"
             + "<meta name='viewport' content='width=device-width,initial-scale=1.0'>\n"
             + "<title>📊 " + name + " · 数据驾驶舱</title>\n"
-            + "<script src='https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js'></script>\n"
+            + "<script src='/static/js/echarts.min.js'></script>\n"
             + "<style>"
             + "body{font-family:-apple-system,'Microsoft YaHei',sans-serif;background:#f0f4f8;padding:24px;margin:0;color:#333}"
             + ".kpi{display:flex;gap:16px;margin-bottom:24px;flex-wrap:wrap}"
@@ -372,7 +372,7 @@ public class AiDataAnalyzeServiceImpl implements IAiDataAnalyzeService
         String safeSummary = (summary != null ? summary : "").replace("\\", "\\\\").replace("'", "\\'").replace("\r", "").replace("\n", "<br>");
 
         return "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>" + safeTitle + "</title>"
-            + "<script src='https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js'></script>"
+            + "<script src='/static/js/echarts.min.js'></script>"
             + "<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,'Microsoft YaHei',sans-serif;background:#f0f4f8;padding:20px;color:#333}.h{background:#fff;border-radius:16px;padding:20px 24px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,0.04)}.h h1{font-size:22px;margin-bottom:4px}.h p{color:#999;font-size:13px}.kpi{display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap}.k{flex:1;background:#fff;border-radius:16px;padding:18px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.04);min-width:140px}.kl{font-size:12px;color:#999;margin-bottom:6px}.kv{font-size:28px;font-weight:700;color:#2a6df4}.g{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}@media(max-width:768px){.g{grid-template-columns:1fr}}.gc{background:#fff;border-radius:16px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,0.04)}.gc h3{margin-bottom:8px;font-size:15px;color:#303133}.cb{width:100%;height:360px}.s{background:#fff;border-radius:16px;padding:20px 24px;line-height:1.8;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,0.04)}.ft{text-align:center;color:#bbb;font-size:12px;padding:16px 0 4px}.empty{display:flex;align-items:center;justify-content:center;height:360px;color:#ccc;font-size:14px}</style></head><body>"
             + "<div class='h'><h1>" + safeTitle + "</h1><p>" + safeMeta + "</p></div>"
             + "<div class='kpi' id='kpi'></div><div class='g' id='charts'></div>"
