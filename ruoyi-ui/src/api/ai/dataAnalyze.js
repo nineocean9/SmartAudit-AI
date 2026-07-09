@@ -1,6 +1,5 @@
 import request from '@/utils/request'
 
-// 获取分析结果列表
 export function listAnalysisResults(keyword, pageNum, pageSize) {
   return request({
     url: '/ai/data/analysis/list',
@@ -9,7 +8,6 @@ export function listAnalysisResults(keyword, pageNum, pageSize) {
   })
 }
 
-// 获取分析结果详情
 export function getAnalysisResult(id) {
   return request({
     url: `/ai/data/analysis/${id}`,
@@ -17,7 +15,21 @@ export function getAnalysisResult(id) {
   })
 }
 
-// 从项目库分析
+export function deleteAnalysis(ids) {
+  return request({
+    url: `/ai/data/analysis/${ids}`,
+    method: 'delete'
+  })
+}
+
+export function updateAnalysis(data) {
+  return request({
+    url: '/ai/data/analysis',
+    method: 'put',
+    data
+  })
+}
+
 export function analyzeProject(data) {
   return request({
     url: '/ai/data/analyze-project',
@@ -27,7 +39,6 @@ export function analyzeProject(data) {
   })
 }
 
-// 上传文件分析
 export function analyzeUpload(formData) {
   return request({
     url: '/ai/data/analyze-upload',
@@ -38,7 +49,6 @@ export function analyzeUpload(formData) {
   })
 }
 
-// 分析文本数据
 export function analyzeChart(data) {
   return request({
     url: '/ai/data/analyze-chart',

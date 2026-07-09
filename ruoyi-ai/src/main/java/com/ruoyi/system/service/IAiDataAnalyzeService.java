@@ -18,30 +18,21 @@ public interface IAiDataAnalyzeService
         public List<Map<String, Object>> rawData;
     }
 
-    /**
-     * 执行数据分析指令
-     */
     AnalyzeResult analyze(String instruction);
 
-    /**
-     * AI 数据分析并生成图表
-     */
     Map<String, Object> analyzeChart(String dataText, String instruction,
                                      String projectName, String keyword,
                                      String sourceType, String createBy);
 
-    /**
-     * 获取已保存的分析结果
-     */
     Map<String, Object> getAnalysisResult(Long id);
 
-    /**
-     * 获取分析结果的 HTML 内容
-     */
     String getAnalysisHtml(Long id);
 
-    /**
-     * 列出分析结果列表
-     */
     TableDataInfo listAnalysisResults(String keyword, Integer pageNum, Integer pageSize);
+
+    int deleteAnalysisResult(Long id);
+
+    int deleteAnalysisResults(Long[] ids);
+
+    int updateAnalysisResult(Long id, String title, String projectName, String keyword);
 }

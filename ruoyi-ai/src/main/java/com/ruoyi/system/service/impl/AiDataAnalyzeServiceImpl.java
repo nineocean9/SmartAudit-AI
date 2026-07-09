@@ -166,6 +166,19 @@ public class AiDataAnalyzeServiceImpl implements IAiDataAnalyzeService
 
             String title = (projectName != null && !projectName.isBlank() ? projectName : "数据") + " - 数据驾驶舱";
 
+            // 第二次 AI 调用：生成文字分析总结（markdown 格式）
+            String summaryText;
+            try
+            {
+                String summaryPrompt = buildSummaryPrompt(truncated, projectName);
+                summaryText = chatModel.generate(summaryPrompt);
+            }
+            catch (Exception e2)
+            {
+                log.warn("AI 生成文字总结失败，使用默认值", e2);
+                summaryText = "AI 生成的数据驾驶舱";
+            }
+
             // 保存（html_content 存 HTML，chart_data 存空数组兼容旧逻辑）
             String sql = "INSERT INTO analysis_result (title, chart_data, html_content, summary, project_name, source_type, keyword, create_by, create_time) "
                        + "VALUES (?, '[]'::jsonb, ?, ?, ?, ?, ?, ?, now()) RETURNING id";
@@ -175,7 +188,7 @@ public class AiDataAnalyzeServiceImpl implements IAiDataAnalyzeService
             {
                 ps.setString(1, title);
                 ps.setString(2, html);
-                ps.setString(3, "AI 生成的数据驾驶舱");
+                ps.setString(3, summaryText);
                 ps.setString(4, projectName);
                 ps.setString(5, sourceType != null ? sourceType : "chat");
                 ps.setString(6, keyword);
@@ -188,7 +201,7 @@ public class AiDataAnalyzeServiceImpl implements IAiDataAnalyzeService
 
             result.put("analysisId", analysisId);
             result.put("title", title);
-            result.put("summary", "AI 生成的数据驾驶舱");
+            result.put("summary", summaryText);
         }
         catch (Exception e)
         {
@@ -249,6 +262,28 @@ public class AiDataAnalyzeServiceImpl implements IAiDataAnalyzeService
             + "3. 生成 4~6 个图表，混合 bar(柱状)/pie(饼图)/line(折线)/radar(雷达) 类型\n"
             + "4. 不要编造数据\n"
             + "5. 只输出完整 HTML，不要任何额外文字\n\n"
+            + "项目：" + name + "\n"
+            + "数据：\n" + dataText;
+    }
+
+    private String buildSummaryPrompt(String dataText, String projectName)
+    {
+        String name = projectName != null ? projectName : "数据";
+        return "你是一个专业的审计数据分析师。请根据以下数据撰写一份**审计分析总结��告**。\n\n"
+            + "要求：\n"
+            + "1. 使用 Markdown 格式\n"
+            + "2. 包含以下结构：\n"
+            + "   ## 数据概况\n"
+            + "   简要说明数据来源、时间范围、数据规模\n\n"
+            + "   ## 关键发现\n"
+            + "   列出 3~5 个关键数据特征或异常点（使用带序号的列表）\n\n"
+            + "   ## 风险提示\n"
+            + "   列出数据中可能存在的审计风险（如有）\n\n"
+            + "   ## 建议\n"
+            + "   给出 2~3 条可操作的审计建议\n\n"
+            + "3. 语言专业、简洁，适合审计人员阅读\n"
+            + "4. 不要编造数据，只基于提供的数据分析\n"
+            + "5. 总字数控制在 300~600 字\n\n"
             + "项目：" + name + "\n"
             + "数据：\n" + dataText;
     }
@@ -416,6 +451,63 @@ public class AiDataAnalyzeServiceImpl implements IAiDataAnalyzeService
         {
             log.error("查询分析结果列表失败", e);
             return new TableDataInfo(List.of(), 0);
+        }
+    }
+
+    @Override
+    public int deleteAnalysisResult(Long id)
+    {
+        String sql = "DELETE FROM analysis_result WHERE id = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql))
+        {
+            ps.setLong(1, id);
+            return ps.executeUpdate();
+        }
+        catch (Exception e)
+        {
+            log.error("删除分析结果失败", e);
+            return 0;
+        }
+    }
+
+    @Override
+    public int deleteAnalysisResults(Long[] ids)
+    {
+        if (ids == null || ids.length == 0) return 0;
+        StringBuilder sb = new StringBuilder("DELETE FROM analysis_result WHERE id IN (");
+        for (int i = 0; i < ids.length; i++) { if (i > 0) sb.append(","); sb.append("?"); }
+        sb.append(")");
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sb.toString()))
+        {
+            for (int i = 0; i < ids.length; i++) ps.setLong(i + 1, ids[i]);
+            return ps.executeUpdate();
+        }
+        catch (Exception e)
+        {
+            log.error("批量删除分析结果失败", e);
+            return 0;
+        }
+    }
+
+    @Override
+    public int updateAnalysisResult(Long id, String title, String projectName, String keyword)
+    {
+        String sql = "UPDATE analysis_result SET title = ?, project_name = ?, keyword = ? WHERE id = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql))
+        {
+            ps.setString(1, title);
+            ps.setString(2, projectName);
+            ps.setString(3, keyword);
+            ps.setLong(4, id);
+            return ps.executeUpdate();
+        }
+        catch (Exception e)
+        {
+            log.error("更新分析结果失败", e);
+            return 0;
         }
     }
 

@@ -100,6 +100,22 @@ public class AiDataAnalyzeController
         return success(dataAnalyzeService.getAnalysisResult(id));
     }
 
+    @DeleteMapping("/analysis/{ids}")
+    public AjaxResult deleteAnalysis(@PathVariable Long[] ids)
+    {
+        return AjaxResult.success(dataAnalyzeService.deleteAnalysisResults(ids));
+    }
+
+    @PutMapping("/analysis")
+    public AjaxResult updateAnalysis(@RequestBody Map<String, Object> body)
+    {
+        Long id = Long.valueOf(body.get("id").toString());
+        String title = (String) body.getOrDefault("title", "");
+        String projectName = (String) body.getOrDefault("projectName", "");
+        String keyword = (String) body.getOrDefault("keyword", "");
+        return AjaxResult.success(dataAnalyzeService.updateAnalysisResult(id, title, projectName, keyword));
+    }
+
     /**
      * 直接返回 AI 生成的 HTML 驾驶舱页面
      * GET /ai/data/analysis/{id}/html

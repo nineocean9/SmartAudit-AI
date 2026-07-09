@@ -74,7 +74,7 @@
                 <div v-if="msg.dashboardId" class="dashboard-link-card">
                   <div class="dashboard-link-title">📊 已生成数据驾驶舱</div>
                   <div class="dashboard-link-desc">点击下方链接查看完整图表和分析总结</div>
-                  <a class="dashboard-link-btn" :href="`${baseApiUrl}/ai/data/analysis/${msg.dashboardId}/html`" target="_blank">查看数据驾驶舱</a>
+                  <span class="dashboard-link-btn" @click="goToDashboard(msg.dashboardId)">查看数据驾驶舱</span>
                 </div>
               </div>
 
@@ -114,6 +114,7 @@
 
 <script setup>
 import { ref, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { EditPen, ChatDotRound, Edit, Delete, Loading, Warning, MagicStick, Cpu, Document, DataAnalysis } from '@element-plus/icons-vue'
 import { getToken } from '@/utils/auth'
@@ -134,7 +135,7 @@ const renameTargetId = ref(null)
 
 let currentReader = null
 let sseEventBuffer = null
-const baseApiUrl = import.meta.env.VITE_APP_BASE_API || ''
+const router = useRouter()
 
 const messagesAreaRef = ref(null)
 const inputRef = ref(null)
@@ -362,6 +363,10 @@ function quickAction(type) {
   focusInput()
 }
 
+function goToDashboard(id) {
+  router.push(`/visualization/detail?id=${id}`)
+}
+
 function escapeHtml(str) {
   return String(str)
     .replace(/&/g, '&amp;')
@@ -536,8 +541,9 @@ function focusInput() {
   border-radius: 8px;
   text-decoration: none;
   font-weight: 500;
+  cursor: pointer;
 }
-.dashboard-link-btn:hover { background: #66b1ff; }
+.dashboard-link-btn:hover { background: #66b1ff; color: #fff; }
 
 .shortcut-bar { display: flex; gap: 6px; margin-bottom: 6px; padding: 0 2px; }
 .shortcut-btn {
