@@ -42,11 +42,12 @@ public class ChatTaskParserServiceImpl implements IChatTaskParserService
                 + "  \"needChart\": true\n"
                 + "}\n\n"
                 + "规则：\n"
-                + "1. 项目库浏览 → LIST_PROJECTS\n"
-                + "2. 读某项目资料 → READ_PROJECT，projectName=项目名\n"
-                + "3. 分析/图表/数据 → ANALYZE_PROJECT，projectName=项目名，needChart=true\n"
-                + "4. 普通问答 → QA\n"
-                + "5. 不再需要 keyword 字段\n\n"
+                + "1. 浏览项目库、看有什么资料 → LIST_PROJECTS\n"
+                + "2. 针对某个项目提问（如\"A公司预算多少\"\"B项目有什么问题\"\"某公司的收入\"等） → READ_PROJECT，projectName=项目名\n"
+                + "3. 要求生成图表/驾驶舱/可视化分析 → ANALYZE_PROJECT，projectName=项目名，needChart=true\n"
+                + "4. 不涉及具体项目的通用问题 → QA\n"
+                + "5. 只要用户提到了某个具体项目/公司/单位名称并在问问题，就是 READ_PROJECT\n"
+                + "6. 不再需要 keyword 字段\n\n"
                 + "会话历史：\n" + historyText + "\n\n"
                 + "用户输入：" + userInput;
 
@@ -68,15 +69,22 @@ public class ChatTaskParserServiceImpl implements IChatTaskParserService
         {
             // 兜底：简单规则，不让流程中断
             ChatTask fallback = new ChatTask();
-            if (userInput.contains("项目库") || userInput.contains("文档") || userInput.contains("资料"))
+            if (userInput.contains("项目库") || userInput.contains("有什么资料") || userInput.contains("资料列表"))
             {
                 fallback.setTaskType("LIST_PROJECTS");
                 fallback.setNeedChart(false);
             }
-            else if (userInput.contains("分析") || userInput.contains("图表") || userInput.contains("预算"))
+            else if (userInput.contains("图表") || userInput.contains("驾驶舱") || userInput.contains("可视化"))
             {
                 fallback.setTaskType("ANALYZE_PROJECT");
                 fallback.setNeedChart(true);
+                fallback.setProjectName(extractSimpleProjectName(userInput));
+            }
+            else if (extractSimpleProjectName(userInput) != null)
+            {
+                // 提到了具体项目/公司名 → 针对项目提问
+                fallback.setTaskType("READ_PROJECT");
+                fallback.setNeedChart(false);
                 fallback.setProjectName(extractSimpleProjectName(userInput));
             }
             else
