@@ -89,6 +89,7 @@
         <div class="shortcut-bar">
           <el-button size="small" class="shortcut-btn" @click="quickAction('取证单')"><el-icon><Document /></el-icon>生成取证单</el-button>
           <el-button size="small" class="shortcut-btn" @click="quickAction('风险分析')"><el-icon><Warning /></el-icon>风险分析</el-button>
+          <el-button size="small" class="shortcut-btn" @click="quickAction('文档核查')"><el-icon><Checked /></el-icon>文档核查</el-button>
           <el-button size="small" class="shortcut-btn" @click="quickAction('数据分析')"><el-icon><DataAnalysis /></el-icon>数据分析</el-button>
         </div>
         <div class="input-box" :class="{ focused: inputFocused }">
@@ -116,7 +117,7 @@
 import { ref, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { EditPen, ChatDotRound, Edit, Delete, Loading, Warning, MagicStick, Cpu, Document, DataAnalysis } from '@element-plus/icons-vue'
+import { EditPen, ChatDotRound, Edit, Delete, Loading, Warning, MagicStick, Cpu, Document, DataAnalysis, CircleCheck as Checked } from '@element-plus/icons-vue'
 import { getToken } from '@/utils/auth'
 import { listConversations, createConversation, renameConversation, deleteConversation, listMessages } from '@/api/ai/chat'
 
@@ -355,9 +356,10 @@ function abortStream() {
 
 function quickAction(type) {
   const prompts = {
-    '取证单': '请生成一份关于【请填写审计问题】的标准化审计取证单，包含问题描述、引用依据、结论和整改建议。',
-    '风险分析': '请分析以下业务数据中存在的风险点，按高风险、中风险、低风险分类列出，并给出相应的审计建议。\n',
-    '数据分析': '请生成项目库中与预算/收入/支出相关的数据驾驶舱，并输出可视化分析。'
+    '取证单': '请为【项目名】的【审计问题】生成取证单',
+    '风险分析': '请扫描【项目名】项目的风险点，列出可能存在的审计风险线索',
+    '文档核查': '请对【项目名】项目进行文档核查，检查文档合规性',
+    '数据分析': '请生成【项目名】项目的数据驾驶舱，输出可视化分析'
   }
   inputText.value = prompts[type] || ''
   focusInput()

@@ -17,6 +17,10 @@ public class DocumentChunk
     private Integer tokenCount;
     /** pgvector 向量（程序中使用，不直接写入MyBatis） */
     private float[] embedding;
+    /** 来源类型: PROJECT-项目文档, CASE-案例库, RISK_CASE-风险案例库 */
+    private String sourceType;
+    /** 来源记录ID（案例库id/风险案例id，source_type非PROJECT时使用） */
+    private Long sourceId;
     private Date createTime;
 
     // ---- getter / setter ----
@@ -38,6 +42,12 @@ public class DocumentChunk
 
     public float[] getEmbedding() { return embedding; }
     public void setEmbedding(float[] embedding) { this.embedding = embedding; }
+
+    public String getSourceType() { return sourceType; }
+    public void setSourceType(String sourceType) { this.sourceType = sourceType; }
+
+    public Long getSourceId() { return sourceId; }
+    public void setSourceId(Long sourceId) { this.sourceId = sourceId; }
 
     public Date getCreateTime() { return createTime; }
     public void setCreateTime(Date createTime) { this.createTime = createTime; }

@@ -10,13 +10,16 @@
         <result property="chunkIndex"  column="chunk_index"   />
         <result property="content"     column="content"       />
         <result property="tokenCount"  column="token_count"   />
+        <result property="sourceType"  column="source_type"   />
+        <result property="sourceId"    column="source_id"     />
         <result property="createTime"  column="create_time"   />
     </resultMap>
 
     <insert id="insertChunk" parameterType="com.ruoyi.system.domain.DocumentChunk"
             useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO document_chunk(document_id, chunk_index, content, token_count, create_time)
-        VALUES (#{documentId}, #{chunkIndex}, #{content}, #{tokenCount}, now())
+        INSERT INTO document_chunk(document_id, chunk_index, content, token_count, source_type, source_id, create_time)
+        VALUES (#{documentId}, #{chunkIndex}, #{content}, #{tokenCount},
+                #{sourceType, jdbcType=VARCHAR}, #{sourceId, jdbcType=BIGINT}, now())
     </insert>
 
     <select id="selectByDocumentId" resultMap="ChunkResult">
@@ -38,6 +41,10 @@
 
     <delete id="deleteById">
         DELETE FROM document_chunk WHERE id = #{id}
+    </delete>
+
+    <delete id="deleteBySourceTypeAndSourceId">
+        DELETE FROM document_chunk WHERE source_type = #{sourceType} AND source_id = #{sourceId}
     </delete>
 
 </mapper>

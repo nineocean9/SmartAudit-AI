@@ -25,13 +25,11 @@ import com.ruoyi.system.service.IAiChatService;
  * AI 对话 Controller
  *
  * 职责：
- *   1. 提供 AI 对话页面的路由跳转
- *   2. 提供会话的增删改查 REST 接口（供前端 AJAX 调用）
- *   3. 提供 SSE 流式对话接口（供前端 EventSource 连接）
+ *   1. 提供会话的增删改查 REST 接口（供前端 AJAX 调用）
+ *   2. 提供 SSE 流式对话接口（供前端 EventSource 连接）
  *
  * 接口路径前缀：/ai/chat
- * 页面模板路径：templates/ai/chat.html
- * 
+ *
  *  @author ruoyi
  */
 @Controller
@@ -40,18 +38,6 @@ public class AiChatController extends BaseController
 {
     @Autowired
     private IAiChatService aiChatService;
-
-    /**
-     * 跳转到 AI 对话主页面
-     * GET /ai/chat
-     *
-     * @return Thymeleaf 模板路径 templates/ai/chat.html
-     */
-    @GetMapping()
-    public String chatPage()
-    {
-        return "ai/chat";
-    }
 
     /**
      * 获取当前登录用户的会话列表

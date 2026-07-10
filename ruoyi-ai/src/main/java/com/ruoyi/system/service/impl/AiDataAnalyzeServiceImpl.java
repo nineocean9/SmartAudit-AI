@@ -2,9 +2,7 @@ package com.ruoyi.system.service.impl;
 
 import com.ruoyi.system.config.AiModelProperties;
 import com.ruoyi.system.service.IAiDataAnalyzeService;
-import com.ruoyi.system.service.IAnalysisSummaryService;
-import com.ruoyi.system.service.IAnalysisToolService;
-import com.ruoyi.system.service.IChartToolService;
+
 import com.alibaba.fastjson2.JSON;
 import com.ruoyi.common.core.page.TableDataInfo;
 import dev.langchain4j.model.chat.ChatLanguageModel;
@@ -36,14 +34,6 @@ public class AiDataAnalyzeServiceImpl implements IAiDataAnalyzeService
     @Autowired
     private ChatLanguageModel chatModel;
 
-    @Autowired
-    private IAnalysisToolService analysisToolService;
-
-    @Autowired
-    private IChartToolService chartToolService;
-
-    @Autowired
-    private IAnalysisSummaryService analysisSummaryService;
 
     /** SQL 模板定义 */
     private static final List<AnalysisTemplate> TEMPLATES = List.of(

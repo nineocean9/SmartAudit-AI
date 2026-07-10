@@ -8,7 +8,7 @@ package com.ruoyi.system.domain;
  */
 public class ChatTask
 {
-    /** LIST_PROJECTS / READ_PROJECT / ANALYZE_PROJECT / QA */
+    /** LIST_PROJECTS / READ_PROJECT / ANALYZE_PROJECT / RISK_SCAN / DOC_CHECK / FORENSIC / QA */
     private String taskType;
 
     /** A公司 / 图书馆工程审计委托项目 / 科研经费专项审计 */

@@ -25,4 +25,7 @@ public interface DocumentChunkMapper
 
     /** 删除指定ID的切块 */
     int deleteById(@Param("id") Long id);
+
+    /** 按来源类型和来源ID删除切块（案例库/风险案例库使用） */
+    int deleteBySourceTypeAndSourceId(@Param("sourceType") String sourceType, @Param("sourceId") Long sourceId);
 }

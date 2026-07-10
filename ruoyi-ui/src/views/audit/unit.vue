@@ -10,6 +10,7 @@
           <el-empty v-if="!loading && units.length===0" description="暂无单位" />
         </div>
         <el-button type="primary" size="small" style="margin-top:10px;width:100%" @click="openAdd">新增单位</el-button>
+        <el-button type="danger" size="small" style="margin-top:6px;width:100%" :disabled="!curUnit" @click="handleDelete">删除选中单位</el-button>
       </el-col>
       <el-col :span="18">
         <el-card v-if="curUnit">
@@ -47,8 +48,8 @@
 </template>
 <script setup>
 import { ref, watch } from 'vue'
-import { listUnit, addUnit, getUnitProfile } from '@/api/audit/auditInfo'
-import { ElMessage } from 'element-plus'
+import { listUnit, addUnit, delUnit, getUnitProfile } from '@/api/audit/auditInfo'
+import { ElMessage, ElMessageBox } from 'element-plus'
 const filterText = ref(''); const loading = ref(false)
 const units = ref([]); const curUnit = ref(null)
 const leaders = ref([]); const projects = ref([])
@@ -58,6 +59,14 @@ function loadUnits(filter='') { loading.value=true; listUnit({unitName:filter}).
 function selectUnit(u) { curUnit.value=u; getUnitProfile(u.id).then(r=>{leaders.value=r.data?.leaders||[];projects.value=r.data?.projects||[]}) }
 function openAdd() { editForm.value={unit_type:'学院'}; dlgEdit.value=true }
 function submitEdit() { addUnit(editForm.value).then(r=>{if(r.code===200){ElMessage.success('已保存');dlgEdit.value=false;loadUnits(filterText.value)}}) }
+function handleDelete() {
+  if (!curUnit.value) return
+  ElMessageBox.confirm('确定要删除单位「' + curUnit.value.unit_name + '」吗？', '提示', { type: 'warning' }).then(() => {
+    delUnit(curUnit.value.id).then(r => {
+      if (r.code === 200) { ElMessage.success('删除成功'); curUnit.value = null; leaders.value = []; projects.value = []; loadUnits(filterText.value) }
+    })
+  }).catch(() => {})
+}
 loadUnits()
 </script>
 <style scoped>

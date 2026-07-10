@@ -89,7 +89,9 @@ public class AuditRagServiceImpl implements IAuditRagService
         Set<IKnowledgeManager.KnowledgeSource> sources = Set.of(
                 IKnowledgeManager.KnowledgeSource.POLICY,
                 IKnowledgeManager.KnowledgeSource.PROJECT,
-                IKnowledgeManager.KnowledgeSource.TEMP);
+                IKnowledgeManager.KnowledgeSource.TEMP,
+                IKnowledgeManager.KnowledgeSource.CASE,
+                IKnowledgeManager.KnowledgeSource.RISK_CASE);
         List<IKnowledgeManager.SearchResult> allResults = knowledgeManager.search(
                 userQuery, sources, null, null, 8);
 
@@ -97,6 +99,8 @@ public class AuditRagServiceImpl implements IAuditRagService
         ctx.recalledBasis = new ArrayList<>();
         List<String> projectChunks = new ArrayList<>();
         List<String> tempChunks = new ArrayList<>();
+        List<String> caseChunks = new ArrayList<>();
+        List<String> riskCaseChunks = new ArrayList<>();
 
         if (allResults != null)
         {
@@ -118,10 +122,17 @@ public class AuditRagServiceImpl implements IAuditRagService
                     case TEMP:
                         tempChunks.add(sr.getContent());
                         break;
+                    case CASE:
+                        caseChunks.add(sr.getContent());
+                        break;
+                    case RISK_CASE:
+                        riskCaseChunks.add(sr.getContent());
+                        break;
                 }
             }
-            log.info("多源检索完成: 法规{}条, 项目{}chunk, 临时{}chunk",
-                    ctx.recalledBasis.size(), projectChunks.size(), tempChunks.size());
+            log.info("多源检索完成: 法规{}条, 项目{}chunk, 临时{}chunk, 案例{}chunk, 风险案例{}chunk",
+                    ctx.recalledBasis.size(), projectChunks.size(), tempChunks.size(),
+                    caseChunks.size(), riskCaseChunks.size());
         }
 
         // Step 3: 项目信息检索（关键词匹配）
@@ -148,7 +159,7 @@ public class AuditRagServiceImpl implements IAuditRagService
 
         // Step 5: 拼装增强后的 System Prompt
         ctx.augmentedSystemPrompt = buildAugmentedPrompt(ctx, "general", null,
-                projectChunks, tempChunks, allResults);
+                projectChunks, tempChunks, caseChunks, riskCaseChunks, allResults);
 
         return ctx;
     }
@@ -225,11 +236,12 @@ public class AuditRagServiceImpl implements IAuditRagService
      */
     private String buildAugmentedPrompt(RagContext ctx)
     {
-        return buildAugmentedPrompt(ctx, "policy", null, List.of(), List.of(), null);
+        return buildAugmentedPrompt(ctx, "policy", null, List.of(), List.of(), List.of(), List.of(), null);
     }
 
     private String buildAugmentedPrompt(RagContext ctx, String workspaceMode, Long projectId,
                                         List<String> projectChunks, List<String> tempChunks,
+                                        List<String> caseChunks, List<String> riskCaseChunks,
                                         List<IKnowledgeManager.SearchResult> allResults)
     {
         StringBuilder sb = new StringBuilder();
@@ -320,6 +332,38 @@ public class AuditRagServiceImpl implements IAuditRagService
             sb.append("---\n");
         }
 
+        // 追加案例库检索结果
+        if (caseChunks != null && !caseChunks.isEmpty())
+        {
+            sb.append("\n## 相关审计案例\n\n");
+            int idx = 1;
+            for (String chunk : caseChunks)
+            {
+                sb.append("### 案例").append(idx).append("\n");
+                sb.append("> ").append(truncateText(chunk, 500)).append("\n\n");
+                idx++;
+                if (idx > 5) break;
+            }
+            sb.append("请参考以上案例中的审计方法和处理方式。\n");
+            sb.append("---\n");
+        }
+
+        // 追加风险案例库检索结果
+        if (riskCaseChunks != null && !riskCaseChunks.isEmpty())
+        {
+            sb.append("\n## 相关风险案例\n\n");
+            int idx = 1;
+            for (String chunk : riskCaseChunks)
+            {
+                sb.append("### 风险案例").append(idx).append("\n");
+                sb.append("> ").append(truncateText(chunk, 500)).append("\n\n");
+                idx++;
+                if (idx > 5) break;
+            }
+            sb.append("请参考以上风险案例进行风险识别和预警。\n");
+            sb.append("---\n");
+        }
+
         // 追加审计项目结构化数据
         if (matchedProjects != null && !matchedProjects.isEmpty())
         {
@@ -378,6 +422,8 @@ public class AuditRagServiceImpl implements IAuditRagService
         if (ctx.recalledBasis.isEmpty()
                 && (projectChunks == null || projectChunks.isEmpty())
                 && (tempChunks == null || tempChunks.isEmpty())
+                && (caseChunks == null || caseChunks.isEmpty())
+                && (riskCaseChunks == null || riskCaseChunks.isEmpty())
                 && (matchedProjects == null || matchedProjects.isEmpty()))
         {
             sb.append("\n> 注意：未检索到任何相关资料，请如实告知用户并建议人工核查。\n");

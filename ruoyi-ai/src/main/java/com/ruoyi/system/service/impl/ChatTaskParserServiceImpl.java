@@ -37,7 +37,7 @@ public class ChatTaskParserServiceImpl implements IChatTaskParserService
         String prompt = "你是一个任务解析器。请把用户请求解析成 JSON，不要返回任何解释文字。\n\n"
                 + "输出格式：\n"
                 + "{\n"
-                + "  \"taskType\": \"LIST_PROJECTS | READ_PROJECT | ANALYZE_PROJECT | QA\",\n"
+                + "  \"taskType\": \"LIST_PROJECTS | READ_PROJECT | ANALYZE_PROJECT | RISK_SCAN | DOC_CHECK | FORENSIC | QA\",\n"
                 + "  \"projectName\": \"A公司\",\n"
                 + "  \"needChart\": true\n"
                 + "}\n\n"
@@ -45,9 +45,12 @@ public class ChatTaskParserServiceImpl implements IChatTaskParserService
                 + "1. 浏览项目库、看有什么资料 → LIST_PROJECTS\n"
                 + "2. 针对某个项目提问（如\"A公司预算多少\"\"B项目有什么问题\"\"某公司的收入\"等） → READ_PROJECT，projectName=项目名\n"
                 + "3. 要求生成图表/驾驶舱/可视化分析 → ANALYZE_PROJECT，projectName=项目名，needChart=true\n"
-                + "4. 不涉及具体项目的通用问题 → QA\n"
-                + "5. 只要用户提到了某个具体项目/公司/单位名称并在问问题，就是 READ_PROJECT\n"
-                + "6. 不再需要 keyword 字段\n\n"
+                + "4. 扫描风险/风险点/风险扫描/风险线索 → RISK_SCAN，projectName=项目名\n"
+                + "5. 核查文档/文档核查/合规检查/文档合规 → DOC_CHECK，projectName=项目名\n"
+                + "6. 生成取证单/出具取证/取证单 → FORENSIC，projectName=项目名\n"
+                + "7. 不涉及具体项目的通用问题 → QA\n"
+                + "8. 只要用户提到了某个具体项目/公司/单位名称并在问问题，就是 READ_PROJECT\n"
+                + "9. 不再需要 keyword 字段\n\n"
                 + "会话历史：\n" + historyText + "\n\n"
                 + "用户输入：" + userInput;
 
@@ -73,6 +76,24 @@ public class ChatTaskParserServiceImpl implements IChatTaskParserService
             {
                 fallback.setTaskType("LIST_PROJECTS");
                 fallback.setNeedChart(false);
+            }
+            else if (userInput.contains("取证单") || userInput.contains("出具取证"))
+            {
+                fallback.setTaskType("FORENSIC");
+                fallback.setNeedChart(false);
+                fallback.setProjectName(extractSimpleProjectName(userInput));
+            }
+            else if (userInput.contains("风险扫描") || userInput.contains("扫描风险") || userInput.contains("风险点") || userInput.contains("风险线索"))
+            {
+                fallback.setTaskType("RISK_SCAN");
+                fallback.setNeedChart(false);
+                fallback.setProjectName(extractSimpleProjectName(userInput));
+            }
+            else if (userInput.contains("文档核查") || userInput.contains("核查文档") || userInput.contains("合规检查") || userInput.contains("文档合规"))
+            {
+                fallback.setTaskType("DOC_CHECK");
+                fallback.setNeedChart(false);
+                fallback.setProjectName(extractSimpleProjectName(userInput));
             }
             else if (userInput.contains("图表") || userInput.contains("驾驶舱") || userInput.contains("可视化"))
             {

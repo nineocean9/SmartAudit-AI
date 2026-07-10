@@ -45,6 +45,7 @@ public class AuditRectificationController extends BaseController
                 while (rs.next())
                 {
                     Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("rectId", rs.getObject("rect_id"));
                     row.put("issueId", rs.getLong("issue_id"));
                     row.put("issueDesc", rs.getString("issue_desc"));
                     row.put("severity", rs.getInt("severity"));
@@ -64,6 +65,38 @@ public class AuditRectificationController extends BaseController
         }
         catch (Exception e) { /* 空 */ }
         return getDataTable(list);
+    }
+
+    @PreAuthorize("@ss.hasPermi('audit:rectification:add')")
+    @PostMapping
+    public AjaxResult add(@RequestBody Map<String, Object> body)
+    {
+        String sql = "INSERT INTO audit_rectification (issue_id, measure, status, create_time) VALUES (?, ?, ?, now())";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql))
+        {
+            ps.setLong(1, Long.parseLong(body.get("issueId").toString()));
+            ps.setString(2, (String) body.get("measure"));
+            ps.setInt(3, body.containsKey("status") && body.get("status") != null ? (int) body.get("status") : 0);
+            ps.executeUpdate();
+            return success();
+        }
+        catch (Exception e) { return error(e.getMessage()); }
+    }
+
+    @PreAuthorize("@ss.hasPermi('audit:rectification:remove')")
+    @DeleteMapping("/{id}")
+    public AjaxResult delete(@PathVariable Long id)
+    {
+        String sql = "DELETE FROM audit_rectification WHERE id = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql))
+        {
+            ps.setLong(1, id);
+            ps.executeUpdate();
+            return success();
+        }
+        catch (Exception e) { return error(e.getMessage()); }
     }
 
     @PreAuthorize("@ss.hasPermi('audit:rectification:edit')")

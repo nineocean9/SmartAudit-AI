@@ -107,6 +107,19 @@ export const constantRoutes = [
         meta: { title: '个人中心', icon: 'user' }
       }
     ]
+  },
+  {
+    path: '/audit/issue',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/audit/issue'),
+        name: 'AuditIssue',
+        meta: { title: '审计问题管理', icon: 'bug' }
+      }
+    ]
   }
 ]
 
@@ -212,6 +225,25 @@ export const dynamicRoutes = [
         component: () => import('@/views/ai/dataDashboard'),
         name: 'DataDashboard',
         meta: { title: '数据分析仪表盘' }
+      }
+    ]
+  },
+  {
+    path: '/ai',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: 'forensic',
+        component: () => import('@/views/ai/forensic'),
+        name: 'AiForensic',
+        meta: { title: 'AI取证分析' }
+      },
+      {
+        path: 'log',
+        component: () => import('@/views/ai/aiLog'),
+        name: 'AiLog',
+        meta: { title: 'AI日志' }
       }
     ]
   }

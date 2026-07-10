@@ -18,6 +18,8 @@ public interface IKnowledgeManager
         POLICY,      // 法规知识库 (audit_basis)
         PROJECT,     // 项目知识库 (project_document + document_chunk)
         TEMP,        // 临时工作区 (temporary_workspace)
+        CASE,        // 案例库 (audit_case_lib → document_chunk)
+        RISK_CASE,   // 风险案例库 (audit_risk_case → document_chunk)
         ALL          // 全部来源
     }
 
