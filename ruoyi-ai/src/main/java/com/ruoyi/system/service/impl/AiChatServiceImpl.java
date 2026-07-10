@@ -587,7 +587,7 @@ public class AiChatServiceImpl implements IAiChatService
     }
 
     /**
-     * 生成取证单：读取项目资料，调用 AiForensicService 生成取证单
+     * 生成取证单：读取项目资料 → AI 生成完整取证单内容
      */
     private void handleForensic(Long conversationId, ChatTask task, String userInput, SseEmitter emitter)
     {
@@ -600,7 +600,7 @@ public class AiChatServiceImpl implements IAiChatService
                 return;
             }
 
-            // 从用户输入中提取审计问题描述（去掉常见指令词后的内容作为 issue）
+            // 提取审计问题描述
             String issue = userInput
                     .replaceAll("请|为|的|生成取证单|出具取证|取证单|【|】", "")
                     .replaceAll(projectName, "")
@@ -610,7 +610,20 @@ public class AiChatServiceImpl implements IAiChatService
                 issue = projectName + "项目审计问题";
             }
 
-            com.ruoyi.system.domain.ForensicDraft draft = aiForensicService.generateDraft(issue, null);
+            // 读取项目资料作为上下文
+            String projectContext = null;
+            try
+            {
+                projectContext = projectDocService.getMergedProjectTextByProjectName(projectName);
+            }
+            catch (Exception e)
+            {
+                log.warn("读取项目资料失败: {}", e.getMessage());
+            }
+
+            // 调用增强版 generateDraft（带项目上下文）
+            com.ruoyi.system.domain.ForensicDraft draft =
+                    ((AiForensicServiceImpl) aiForensicService).generateDraft(issue, null, projectName, projectContext);
 
             if (draft == null)
             {
@@ -620,15 +633,15 @@ public class AiChatServiceImpl implements IAiChatService
 
             StringBuilder reply = new StringBuilder();
             reply.append("## 📋 审计取证单\n\n");
-            reply.append("**项目名称：**").append(projectName).append("\n\n");
-            reply.append("**审计问题：**").append(issue).append("\n\n");
-            if (draft.getSuggestion() != null)
+            if (draft.getSuggestion() != null && !draft.getSuggestion().isBlank())
             {
                 reply.append(draft.getSuggestion());
             }
-            if (draft.getIssue() != null && !draft.getIssue().equals(issue))
+            else
             {
-                reply.append("\n\n**问题描述：**").append(draft.getIssue());
+                reply.append("**项目名称：**").append(projectName).append("\n\n");
+                reply.append("**审计问题：**").append(issue).append("\n\n");
+                reply.append("（取证单内容生成失败）");
             }
             reply.append("\n\n---\n*取证单已保存，编号：").append(draft.getId()).append("*");
 
