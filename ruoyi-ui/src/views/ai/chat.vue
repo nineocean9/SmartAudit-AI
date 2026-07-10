@@ -70,11 +70,11 @@
                   <span v-else class="user-text">{{ msg.content }}</span>
                 </div>
 
-                <!-- 正式 dashboard 卡片 -->
-                <div v-if="msg.dashboardId" class="dashboard-link-card">
+                <!-- 正式 dashboard 卡片（支持多个） -->
+                <div v-for="did in (msg.dashboardIds || [])" :key="did" class="dashboard-link-card">
                   <div class="dashboard-link-title">📊 已生成数据驾驶舱</div>
                   <div class="dashboard-link-desc">点击下方链接查看完整图表和分析总结</div>
-                  <span class="dashboard-link-btn" @click="goToDashboard(msg.dashboardId)">查看数据驾驶舱</span>
+                  <span class="dashboard-link-btn" @click="goToDashboard(did)">查看数据驾驶舱</span>
                 </div>
               </div>
 
@@ -204,7 +204,7 @@ async function loadMessageList(convId) {
         loading: false,
         streaming: false,
         error: null,
-        dashboardId: extractDashboardId(m.content)
+        dashboardIds: extractDashboardIds(m.content)
       }))
       nextTick(() => { scrollToBottom(); focusInput() })
     }
@@ -271,9 +271,9 @@ async function handleSendMessage() {
   inputText.value = ''
   isStreaming.value = true
 
-  messages.value.push({ role: 'user', content: text, loading: false, streaming: false, error: null, dashboardId: null })
+  messages.value.push({ role: 'user', content: text, loading: false, streaming: false, error: null, dashboardIds: [] })
   const aiIndex = messages.value.length
-  messages.value.push({ role: 'assistant', content: '', loading: true, streaming: false, error: null, dashboardId: null })
+  messages.value.push({ role: 'assistant', content: '', loading: true, streaming: false, error: null, dashboardIds: [] })
   nextTick(() => scrollToBottom())
 
   const baseUrl = import.meta.env.VITE_APP_BASE_API || ''
@@ -321,7 +321,9 @@ async function handleSendMessage() {
             const analysisId = data
             const cur = messages.value[aiIndex]
             if (cur && analysisId) {
-              messages.value[aiIndex] = { ...cur, dashboardId: analysisId }
+              const ids = [...(cur.dashboardIds || [])]
+              if (!ids.includes(analysisId)) ids.push(analysisId)
+              messages.value[aiIndex] = { ...cur, dashboardIds: ids }
             }
           } else if (event === 'done') {
             messages.value[aiIndex] = { ...messages.value[aiIndex], streaming: false }
@@ -337,7 +339,7 @@ async function handleSendMessage() {
     }
   } catch (e) {
     if (e.name === 'AbortError') return
-    messages.value[aiIndex] = { role: 'assistant', content: '', loading: false, streaming: false, error: e.message || '服务异常，请重试', dashboardId: null }
+    messages.value[aiIndex] = { role: 'assistant', content: '', loading: false, streaming: false, error: e.message || '服务异常，请重试', dashboardIds: [] }
     ElMessage.error('AI 响应失败：' + (e.message || ''))
   } finally {
     isStreaming.value = false
@@ -394,10 +396,15 @@ function renderMarkdown(text) {
   return html
 }
 
-function extractDashboardId(content) {
-  if (!content) return null
-  const match = content.match(/\[dashboard:(\d+)\]/)
-  return match ? match[1] : null
+function extractDashboardIds(content) {
+  if (!content) return []
+  const ids = []
+  const regex = /\[dashboard:(\d+)\]/g
+  let match
+  while ((match = regex.exec(content)) !== null) {
+    ids.push(match[1])
+  }
+  return ids
 }
 
 function stripDashboardTag(content) {

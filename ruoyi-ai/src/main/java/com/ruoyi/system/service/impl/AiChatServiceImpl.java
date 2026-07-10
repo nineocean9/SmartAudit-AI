@@ -27,49 +27,26 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
-/**
- * AI 对话 Service 实现类
- *
- * 当前版本：
- * 1. 统一聊天入口
- * 2. ChatTaskParser 先解析任务
- * 3. 按 taskType 分流到 项目列表 / 项目资料阅读 / 项目分析 / 普通RAG问答
- *
- * @author ruoyi
- */
 @Service
 public class AiChatServiceImpl implements IAiChatService
 {
     private static final Logger log = LoggerFactory.getLogger(AiChatServiceImpl.class);
 
-    @Autowired
-    private StreamingChatLanguageModel streamingModel;
+    @Autowired private StreamingChatLanguageModel streamingModel;
+    @Autowired private AiModelProperties modelProps;
+    @Autowired private IAuditRagService auditRagService;
+    @Autowired private IAiDataAnalyzeService dataAnalyzeService;
+    @Autowired private IAiForensicService aiForensicService;
+    @Autowired private IChatTaskParserService chatTaskParserService;
+    @Autowired private IProjectDocService projectDocService;
+    @Autowired private AiChatMapper aiChatMapper;
 
-    @Autowired
-    private AiModelProperties modelProps;
-
-    @Autowired
-    private IAuditRagService auditRagService;
-
-    @Autowired
-    private IAiDataAnalyzeService dataAnalyzeService;
-
-    @Autowired
-    private IChatTaskParserService chatTaskParserService;
-
-    @Autowired
-    private IProjectDocService projectDocService;
-
-    @Autowired
-    private IAiForensicService aiForensicService;
-
-    @Autowired
-    private AiChatMapper aiChatMapper;
-
-    // ----------------------------------------------------------------
+    // ================================================================
     // 会话管理
-    // ----------------------------------------------------------------
+    // ================================================================
 
     @Override
     public AiConversation createConversation(Long userId, String model)
@@ -94,10 +71,7 @@ public class AiChatServiceImpl implements IAiChatService
     public List<com.ruoyi.system.domain.AiMessage> listMessages(Long conversationId, Long userId)
     {
         AiConversation conv = aiChatMapper.selectConversationById(conversationId, userId);
-        if (conv == null)
-        {
-            return new ArrayList<>();
-        }
+        if (conv == null) return new ArrayList<>();
         return aiChatMapper.selectMessagesByConversationId(conversationId);
     }
 
@@ -114,9 +88,9 @@ public class AiChatServiceImpl implements IAiChatService
         return aiChatMapper.deleteConversation(id, userId);
     }
 
-    // ----------------------------------------------------------------
-    // 核心：流式对话
-    // ----------------------------------------------------------------
+    // ================================================================
+    // 核心：流式对话（支持复合指令）
+    // ================================================================
 
     @Override
     public void chat(Long conversationId, String userInput, Long userId, String username, SseEmitter emitter)
@@ -143,536 +117,281 @@ public class AiChatServiceImpl implements IAiChatService
             aiChatMapper.updateConversationTitle(conversationId, autoTitle, userId);
         }
 
-        // 4. AI 先解析任务
+        // 4. 解析为多个任务
         List<com.ruoyi.system.domain.AiMessage> history = aiChatMapper.selectMessagesByConversationId(conversationId);
-        ChatTask task = chatTaskParserService.parse(userInput, history);
-        String taskType = task != null && task.getTaskType() != null ? task.getTaskType() : "QA";
-        log.info("聊天任务解析: input='{}' -> taskType={}, projectName={}, keyword={}, needChart={}",
-                userInput,
-                taskType,
-                task != null ? task.getProjectName() : null,
-                task != null ? task.getKeyword() : null,
-                task != null ? task.getNeedChart() : null);
+        List<ChatTask> tasks = chatTaskParserService.parseMulti(userInput, history);
+        log.info("复合任务解析: input='{}' -> {} 个任务: {}", userInput, tasks.size(),
+                tasks.stream().map(ChatTask::getTaskType).toList());
 
-        // 5. 分流执行
-        switch (taskType)
+        // 5. 循环执行每个任务
+        for (int i = 0; i < tasks.size(); i++)
         {
-            case "LIST_PROJECTS":
-                handleListProjects(conversationId, emitter);
-                return;
-            case "READ_PROJECT":
-                handleReadProject(conversationId, task, userInput, emitter);
-                return;
-            case "ANALYZE_PROJECT":
-                handleAnalyzeProject(conversationId, task, username, emitter);
-                return;
-            case "RISK_SCAN":
-                handleRiskScan(conversationId, task, userInput, emitter);
-                return;
-            case "DOC_CHECK":
-                handleDocCheck(conversationId, task, userInput, emitter);
-                return;
-            case "FORENSIC":
-                handleForensic(conversationId, task, userInput, emitter);
-                return;
-            default:
-                handleNormalChat(conversationId, userInput, emitter);
-        }
-    }
+            ChatTask task = tasks.get(i);
+            String taskType = task.getTaskType() != null ? task.getTaskType() : "QA";
 
-    /**
-     * 列出项目库资料（泛问）
-     */
-    private void handleListProjects(Long conversationId, SseEmitter emitter)
-    {
-        try
-        {
-            List<com.ruoyi.system.domain.ProjectDocument> docs = projectDocService.listRecentDocs(10);
-            String summary;
-            if (docs == null || docs.isEmpty())
+            // 任务间分隔线
+            if (i > 0)
             {
-                summary = "当前项目库中暂无资料。";
-            }
-            else
-            {
-                StringBuilder sb = new StringBuilder();
-                sb.append("当前项目库中包含以下资料：\n");
-                for (int i = 0; i < docs.size(); i++)
-                {
-                    var d = docs.get(i);
-                    sb.append(i + 1).append(". ")
-                            .append(d.getFileName())
-                            .append("（")
-                            .append(d.getDocType() != null ? d.getDocType() : "其他资料")
-                            .append("）\n");
-                }
-                summary = sb.toString();
+                sendSse(emitter, "message", "\n\n---\n\n");
             }
 
-            persistAndSendAssistantMessage(conversationId, summary, emitter);
-        }
-        catch (Exception e)
-        {
-            log.error("项目列表返回失败", e);
-            persistAndSendAssistantMessage(conversationId, "⚠ 项目列表获取失败：" + e.getMessage(), emitter);
-        }
-    }
-
-    /**
-     * 读取某项目资料并基于内容回答用户问题（流式）
-     */
-    private void handleReadProject(Long conversationId, ChatTask task, String userInput, SseEmitter emitter)
-    {
-        try
-        {
-            String projectName = task != null ? task.getProjectName() : null;
-            if (projectName == null || projectName.isBlank())
-            {
-                persistAndSendAssistantMessage(conversationId, "⚠ 无法识别要查询的项目名称，请指明项目。", emitter);
-                return;
-            }
-
-            // 读取项目文档内容
-            String dataText = projectDocService.getMergedProjectTextByProjectName(projectName);
-            if (dataText == null || dataText.isBlank())
-            {
-                // 回退：列出文件名
-                List<com.ruoyi.system.domain.ProjectDocument> docs = projectDocService.listProjectDocsByProjectName(projectName);
-                if (docs == null || docs.isEmpty())
-                {
-                    persistAndSendAssistantMessage(conversationId,
-                            "⚠ 项目库中未检索到与" + projectName + "相关的资料。请先上传相关文件。", emitter);
-                }
-                else
-                {
-                    StringBuilder sb = new StringBuilder();
-                    sb.append(projectName).append(" 项目中包含以下资料，但文档内容无法解析：\n");
-                    for (int i = 0; i < docs.size(); i++)
-                    {
-                        var d = docs.get(i);
-                        sb.append(i + 1).append(". ").append(d.getFileName())
-                                .append("（").append(d.getDocType() != null ? d.getDocType() : "其他").append("）\n");
-                    }
-                    persistAndSendAssistantMessage(conversationId, sb.toString(), emitter);
-                }
-                return;
-            }
-
-            // 截取避免超长
-            String truncated = dataText.length() > 8000 ? dataText.substring(0, 8000) + "\n...(已截取)" : dataText;
-
-            // 构建消息：系统提示 + 文档内容 + 用户原始问题 → AI 流式回答
-            String systemPrompt = "你是一个专业的审计助手。以下是\"" + projectName + "\"项目的文档资料内容。"
-                    + "请根据这些资料回答用户的问题。如果资料中没有相关信息，请如实说明。\n\n"
-                    + "--- 项目资料开始 ---\n" + truncated + "\n--- 项目资料结束 ---";
-
-            List<ChatMessage> messages = new ArrayList<>();
-            messages.add(SystemMessage.from(systemPrompt));
-
-            // 加入历史消息
-            List<com.ruoyi.system.domain.AiMessage> history = aiChatMapper.selectMessagesByConversationId(conversationId);
-            int max = modelProps.getMaxHistoryMessages();
-            int start = Math.max(0, history.size() - max);
-            for (int i = start; i < history.size(); i++)
-            {
-                com.ruoyi.system.domain.AiMessage m = history.get(i);
-                if ("user".equals(m.getRole()))
-                {
-                    messages.add(UserMessage.from(m.getContent()));
-                }
-                else
-                {
-                    messages.add(AiMessage.from(m.getContent()));
-                }
-            }
-
-            StringBuilder fullReply = new StringBuilder();
-
-            streamingModel.generate(messages, new StreamingResponseHandler<AiMessage>()
-            {
-                @Override
-                public void onNext(String token)
-                {
-                    fullReply.append(token);
-                    sendSse(emitter, "message", token);
-                }
-
-                @Override
-                public void onComplete(Response<AiMessage> response)
-                {
-                    if (fullReply.length() > 0)
-                    {
-                        com.ruoyi.system.domain.AiMessage aiMsg = new com.ruoyi.system.domain.AiMessage();
-                        aiMsg.setConversationId(conversationId);
-                        aiMsg.setRole("assistant");
-                        aiMsg.setContent(fullReply.toString());
-                        if (response.tokenUsage() != null)
-                        {
-                            aiMsg.setTokens(response.tokenUsage().totalTokenCount());
-                        }
-                        aiChatMapper.insertMessage(aiMsg);
-                    }
-                    sendSse(emitter, "done", "[DONE]");
-                    emitter.complete();
-                }
-
-                @Override
-                public void onError(Throwable error)
-                {
-                    log.error("项目问答流式调用异常: {}", error.getMessage());
-                    if (fullReply.length() > 0)
-                    {
-                        com.ruoyi.system.domain.AiMessage aiMsg = new com.ruoyi.system.domain.AiMessage();
-                        aiMsg.setConversationId(conversationId);
-                        aiMsg.setRole("assistant");
-                        aiMsg.setContent(fullReply.toString() + "\n\n---\n*⚠ AI 响应中断*");
-                        aiChatMapper.insertMessage(aiMsg);
-                        sendSse(emitter, "message", "\n\n---\n*⚠ AI 响应中断*");
-                    }
-                    else
-                    {
-                        sendSse(emitter, "message", "⚠ AI 服务异常：" + error.getMessage());
-                    }
-                    sendSse(emitter, "done", "[DONE]");
-                    emitter.complete();
-                }
-            });
-        }
-        catch (Exception e)
-        {
-            log.error("项目资料问答失败", e);
-            persistAndSendAssistantMessage(conversationId, "⚠ 项目资料问答失败：" + e.getMessage(), emitter);
-        }
-    }
-
-    /**
-     * 按项目做分析并生成数据驾驶舱
-     */
-    private void handleAnalyzeProject(Long conversationId, ChatTask task, String username, SseEmitter emitter)
-    {
-        try
-        {
-            String projectName = task != null ? task.getProjectName() : null;
-            if (projectName == null || projectName.isBlank())
-            {
-                persistAndSendAssistantMessage(conversationId, "⚠ 无法识别要分析的项目名称。", emitter);
-                return;
-            }
-
-            String dataText = projectDocService.getMergedProjectTextByProjectName(projectName);
-            if (dataText == null || dataText.isBlank())
-            {
-                persistAndSendAssistantMessage(conversationId,
-                        "⚠ 项目库中未检索到与\"" + projectName + "\"相关的可分析资料。请先上传相关预算/收入/支出文件。",
-                        emitter);
-                return;
-            }
-
-            Map<String, Object> analysis = dataAnalyzeService.analyzeChart(
-                    dataText, projectName, projectName, null, "chat", username);
-            Object analysisId = analysis.get("analysisId");
-            String chatReply = "已为\"" + projectName + "\"生成数据驾驶舱，请点击下方链接查看完整图表与审计分析。";
-
-            com.ruoyi.system.domain.AiMessage aiMsg = new com.ruoyi.system.domain.AiMessage();
-            aiMsg.setConversationId(conversationId);
-            aiMsg.setRole("assistant");
-            aiMsg.setContent(chatReply + (analysisId != null ? "\n[dashboard:" + analysisId + "]" : ""));
-            aiChatMapper.insertMessage(aiMsg);
-
-            sendSse(emitter, "message", chatReply);
-            if (analysisId != null)
-            {
-                sendSse(emitter, "dashboard", String.valueOf(analysisId));
-            }
-            sendSse(emitter, "done", "[DONE]");
-            emitter.complete();
-        }
-        catch (Exception e)
-        {
-            log.error("项目分析失败", e);
-            persistAndSendAssistantMessage(conversationId, "⚠ 项目分析失败：" + e.getMessage(), emitter);
-        }
-    }
-
-    /**
-     * 风险扫描：读取项目资料，让 AI 分析风险点（流式）
-     */
-    private void handleRiskScan(Long conversationId, ChatTask task, String userInput, SseEmitter emitter)
-    {
-        try
-        {
-            String projectName = task != null ? task.getProjectName() : null;
-            if (projectName == null || projectName.isBlank())
-            {
-                persistAndSendAssistantMessage(conversationId, "⚠ 无法识别要扫描的项目名称，请指明项目。", emitter);
-                return;
-            }
-
-            String dataText = projectDocService.getMergedProjectTextByProjectName(projectName);
-            if (dataText == null || dataText.isBlank())
-            {
-                persistAndSendAssistantMessage(conversationId,
-                        "⚠ 项目库中未检索到与\"" + projectName + "\"相关的资料，无法进行风险扫描。请先上传相关文件。", emitter);
-                return;
-            }
-
-            String truncated = dataText.length() > 8000 ? dataText.substring(0, 8000) + "\n...(已截取)" : dataText;
-
-            String systemPrompt = "你是一个专业的审计风险分析师。以下是\"" + projectName + "\"项目的文档资料内容。"
-                    + "请根据这些资料，深入分析该项目可能存在的审计风险点。\n"
-                    + "要求：\n"
-                    + "1. 按高风险、中风险、低风险分类列出\n"
-                    + "2. 每个风险点需说明风险描述、可能的影响和建议的审计措施\n"
-                    + "3. 如果资料中有明显的异常数据或可疑信息，请重点标注\n\n"
-                    + "--- 项目资料开始 ---\n" + truncated + "\n--- 项目资料结束 ---";
-
-            List<ChatMessage> messages = new ArrayList<>();
-            messages.add(SystemMessage.from(systemPrompt));
-            messages.add(UserMessage.from(userInput));
-
-            StringBuilder fullReply = new StringBuilder();
-
-            streamingModel.generate(messages, new StreamingResponseHandler<AiMessage>()
-            {
-                @Override
-                public void onNext(String token)
-                {
-                    fullReply.append(token);
-                    sendSse(emitter, "message", token);
-                }
-
-                @Override
-                public void onComplete(Response<AiMessage> response)
-                {
-                    if (fullReply.length() > 0)
-                    {
-                        com.ruoyi.system.domain.AiMessage aiMsg = new com.ruoyi.system.domain.AiMessage();
-                        aiMsg.setConversationId(conversationId);
-                        aiMsg.setRole("assistant");
-                        aiMsg.setContent(fullReply.toString());
-                        if (response.tokenUsage() != null)
-                        {
-                            aiMsg.setTokens(response.tokenUsage().totalTokenCount());
-                        }
-                        aiChatMapper.insertMessage(aiMsg);
-                    }
-                    sendSse(emitter, "done", "[DONE]");
-                    emitter.complete();
-                }
-
-                @Override
-                public void onError(Throwable error)
-                {
-                    log.error("风险扫描流式调用异常: {}", error.getMessage());
-                    if (fullReply.length() > 0)
-                    {
-                        com.ruoyi.system.domain.AiMessage aiMsg = new com.ruoyi.system.domain.AiMessage();
-                        aiMsg.setConversationId(conversationId);
-                        aiMsg.setRole("assistant");
-                        aiMsg.setContent(fullReply.toString() + "\n\n---\n*⚠ AI 响应中断*");
-                        aiChatMapper.insertMessage(aiMsg);
-                        sendSse(emitter, "message", "\n\n---\n*⚠ AI 响应中断*");
-                    }
-                    else
-                    {
-                        sendSse(emitter, "message", "⚠ 风险扫描失败：" + error.getMessage());
-                    }
-                    sendSse(emitter, "done", "[DONE]");
-                    emitter.complete();
-                }
-            });
-        }
-        catch (Exception e)
-        {
-            log.error("风险扫描失败", e);
-            persistAndSendAssistantMessage(conversationId, "⚠ 风险扫描失败：" + e.getMessage(), emitter);
-        }
-    }
-
-    /**
-     * 文档核查：读取项目资料，让 AI 核查文档合规性（流式）
-     */
-    private void handleDocCheck(Long conversationId, ChatTask task, String userInput, SseEmitter emitter)
-    {
-        try
-        {
-            String projectName = task != null ? task.getProjectName() : null;
-            if (projectName == null || projectName.isBlank())
-            {
-                persistAndSendAssistantMessage(conversationId, "⚠ 无法识别要核查的项目名称，请指明项目。", emitter);
-                return;
-            }
-
-            String dataText = projectDocService.getMergedProjectTextByProjectName(projectName);
-            if (dataText == null || dataText.isBlank())
-            {
-                persistAndSendAssistantMessage(conversationId,
-                        "⚠ 项目库中未检索到与\"" + projectName + "\"相关的资料，无法进行文档核查。请先上传相关文件。", emitter);
-                return;
-            }
-
-            String truncated = dataText.length() > 8000 ? dataText.substring(0, 8000) + "\n...(已截取)" : dataText;
-
-            String systemPrompt = "你是一个专业的审计文档合规审查员。以下是\"" + projectName + "\"项目的文档资料内容。"
-                    + "请对这些文档进行全面的合规性核查。\n"
-                    + "要求：\n"
-                    + "1. 检查文档的完整性（是否缺少必要的审计文件）\n"
-                    + "2. 检查数据的一致性（不同文件间的数据是否矛盾）\n"
-                    + "3. 检查格式的规范性（是否符合审计报告标准格式）\n"
-                    + "4. 列出发现的问题，按严重程度排序\n"
-                    + "5. 给出整改建议\n\n"
-                    + "--- 项目资料开始 ---\n" + truncated + "\n--- 项目资料结束 ---";
-
-            List<ChatMessage> messages = new ArrayList<>();
-            messages.add(SystemMessage.from(systemPrompt));
-            messages.add(UserMessage.from(userInput));
-
-            StringBuilder fullReply = new StringBuilder();
-
-            streamingModel.generate(messages, new StreamingResponseHandler<AiMessage>()
-            {
-                @Override
-                public void onNext(String token)
-                {
-                    fullReply.append(token);
-                    sendSse(emitter, "message", token);
-                }
-
-                @Override
-                public void onComplete(Response<AiMessage> response)
-                {
-                    if (fullReply.length() > 0)
-                    {
-                        com.ruoyi.system.domain.AiMessage aiMsg = new com.ruoyi.system.domain.AiMessage();
-                        aiMsg.setConversationId(conversationId);
-                        aiMsg.setRole("assistant");
-                        aiMsg.setContent(fullReply.toString());
-                        if (response.tokenUsage() != null)
-                        {
-                            aiMsg.setTokens(response.tokenUsage().totalTokenCount());
-                        }
-                        aiChatMapper.insertMessage(aiMsg);
-                    }
-                    sendSse(emitter, "done", "[DONE]");
-                    emitter.complete();
-                }
-
-                @Override
-                public void onError(Throwable error)
-                {
-                    log.error("文档核查流式调用异常: {}", error.getMessage());
-                    if (fullReply.length() > 0)
-                    {
-                        com.ruoyi.system.domain.AiMessage aiMsg = new com.ruoyi.system.domain.AiMessage();
-                        aiMsg.setConversationId(conversationId);
-                        aiMsg.setRole("assistant");
-                        aiMsg.setContent(fullReply.toString() + "\n\n---\n*⚠ AI 响应中断*");
-                        aiChatMapper.insertMessage(aiMsg);
-                        sendSse(emitter, "message", "\n\n---\n*⚠ AI 响应中断*");
-                    }
-                    else
-                    {
-                        sendSse(emitter, "message", "⚠ 文档核查失败：" + error.getMessage());
-                    }
-                    sendSse(emitter, "done", "[DONE]");
-                    emitter.complete();
-                }
-            });
-        }
-        catch (Exception e)
-        {
-            log.error("文档核查失败", e);
-            persistAndSendAssistantMessage(conversationId, "⚠ 文档核查失败：" + e.getMessage(), emitter);
-        }
-    }
-
-    /**
-     * 生成取证单：读取项目资料 → AI 生成完整取证单内容
-     */
-    private void handleForensic(Long conversationId, ChatTask task, String userInput, SseEmitter emitter)
-    {
-        try
-        {
-            String projectName = task != null ? task.getProjectName() : null;
-            if (projectName == null || projectName.isBlank())
-            {
-                persistAndSendAssistantMessage(conversationId, "⚠ 无法识别要生成取证单的项目名称，请指明项目。", emitter);
-                return;
-            }
-
-            // 提取审计问题描述
-            String issue = userInput
-                    .replaceAll("请|为|的|生成取证单|出具取证|取证单|【|】", "")
-                    .replaceAll(projectName, "")
-                    .trim();
-            if (issue.isBlank())
-            {
-                issue = projectName + "项目审计问题";
-            }
-
-            // 读取项目资料作为上下文
-            String projectContext = null;
             try
             {
-                projectContext = projectDocService.getMergedProjectTextByProjectName(projectName);
+                switch (taskType)
+                {
+                    case "LIST_PROJECTS":
+                        executeListProjects(conversationId, emitter);
+                        break;
+                    case "READ_PROJECT":
+                        executeReadProject(conversationId, task, userInput, emitter);
+                        break;
+                    case "ANALYZE_PROJECT":
+                        executeAnalyzeProject(conversationId, task, username, emitter);
+                        break;
+                    case "RISK_SCAN":
+                        executeStreamingTask(conversationId, task, userInput, emitter, buildRiskScanPrompt(task));
+                        break;
+                    case "DOC_CHECK":
+                        executeStreamingTask(conversationId, task, userInput, emitter, buildDocCheckPrompt(task));
+                        break;
+                    case "FORENSIC":
+                        executeForensic(conversationId, task, userInput, emitter);
+                        break;
+                    default:
+                        executeNormalChat(conversationId, userInput, emitter);
+                        break;
+                }
             }
             catch (Exception e)
             {
-                log.warn("读取项目资料失败: {}", e.getMessage());
+                log.error("任务 {} 执行失败", taskType, e);
+                sendSse(emitter, "message", "\n⚠ " + taskType + " 执行失败：" + e.getMessage());
             }
+        }
 
-            // 调用增强版 generateDraft（带项目上下文）
-            com.ruoyi.system.domain.ForensicDraft draft =
-                    ((AiForensicServiceImpl) aiForensicService).generateDraft(issue, null, projectName, projectContext);
+        // 6. 所有任务完成，发送 done
+        sendSse(emitter, "done", "[DONE]");
+        emitter.complete();
+    }
 
-            if (draft == null)
+    // ================================================================
+    // 各任务执行器（不发 done / 不 complete）
+    // ================================================================
+
+    private void executeListProjects(Long conversationId, SseEmitter emitter)
+    {
+        List<com.ruoyi.system.domain.ProjectDocument> docs = projectDocService.listRecentDocs(10);
+        String summary;
+        if (docs == null || docs.isEmpty())
+        {
+            summary = "当前项目库中暂无资料。";
+        }
+        else
+        {
+            StringBuilder sb = new StringBuilder("当前项目库中包含以下资料：\n");
+            for (int i = 0; i < docs.size(); i++)
             {
-                persistAndSendAssistantMessage(conversationId, "⚠ 取证单生成失败，请稍后重试。", emitter);
-                return;
+                var d = docs.get(i);
+                sb.append(i + 1).append(". ").append(d.getFileName())
+                  .append("（").append(d.getDocType() != null ? d.getDocType() : "其他").append("）\n");
             }
+            summary = sb.toString();
+        }
+        persistAndSend(conversationId, summary, emitter);
+    }
 
-            StringBuilder reply = new StringBuilder();
-            reply.append("## 📋 审计取证单\n\n");
-            if (draft.getSuggestion() != null && !draft.getSuggestion().isBlank())
+    private void executeReadProject(Long conversationId, ChatTask task, String userInput, SseEmitter emitter)
+    {
+        String projectName = task.getProjectName();
+        if (projectName == null || projectName.isBlank())
+        {
+            persistAndSend(conversationId, "⚠ 无法识别要查询的项目名称。", emitter);
+            return;
+        }
+
+        String dataText = projectDocService.getMergedProjectTextByProjectName(projectName);
+        if (dataText == null || dataText.isBlank())
+        {
+            List<com.ruoyi.system.domain.ProjectDocument> docs = projectDocService.listProjectDocsByProjectName(projectName);
+            if (docs == null || docs.isEmpty())
             {
-                reply.append(draft.getSuggestion());
+                persistAndSend(conversationId, "⚠ 未检索到"" + projectName + ""的资料。", emitter);
             }
             else
             {
-                reply.append("**项目名称：**").append(projectName).append("\n\n");
-                reply.append("**审计问题：**").append(issue).append("\n\n");
-                reply.append("（取证单内容生成失败）");
+                StringBuilder sb = new StringBuilder(projectName + " 项目包含以下资料（内容无法解析）：\n");
+                for (int i = 0; i < docs.size(); i++)
+                    sb.append(i + 1).append(". ").append(docs.get(i).getFileName()).append("\n");
+                persistAndSend(conversationId, sb.toString(), emitter);
             }
-            reply.append("\n\n---\n*取证单已保存，编号：").append(draft.getId()).append("*");
-
-            persistAndSendAssistantMessage(conversationId, reply.toString(), emitter);
+            return;
         }
-        catch (Exception e)
+
+        String truncated = dataText.length() > 8000 ? dataText.substring(0, 8000) + "\n..." : dataText;
+        String systemPrompt = "你是专业审计助手。以下是"" + projectName + ""的文档资料。请根据资料回答用户的问题。\n\n"
+                + "--- 项目资料 ---\n" + truncated + "\n--- 结束 ---";
+
+        executeStreamingWithPrompt(conversationId, systemPrompt, userInput, emitter);
+    }
+
+    private void executeAnalyzeProject(Long conversationId, ChatTask task, String username, SseEmitter emitter)
+    {
+        String projectName = task.getProjectName();
+        if (projectName == null || projectName.isBlank())
         {
-            log.error("取证单生成失败", e);
-            persistAndSendAssistantMessage(conversationId, "⚠ 取证单生成失败：" + e.getMessage(), emitter);
+            persistAndSend(conversationId, "⚠ 无法识别要分析的项目名称。", emitter);
+            return;
+        }
+
+        String dataText = projectDocService.getMergedProjectTextByProjectName(projectName);
+        if (dataText == null || dataText.isBlank())
+        {
+            persistAndSend(conversationId, "⚠ 未找到"" + projectName + ""的可分析资料。", emitter);
+            return;
+        }
+
+        Map<String, Object> analysis = dataAnalyzeService.analyzeChart(
+                dataText, projectName, projectName, null, "chat", username);
+        Object analysisId = analysis.get("analysisId");
+        String chatReply = "已为"" + projectName + ""生成数据驾驶舱，请点击下方链接查看。";
+
+        com.ruoyi.system.domain.AiMessage aiMsg = new com.ruoyi.system.domain.AiMessage();
+        aiMsg.setConversationId(conversationId);
+        aiMsg.setRole("assistant");
+        aiMsg.setContent(chatReply + (analysisId != null ? "\n[dashboard:" + analysisId + "]" : ""));
+        aiChatMapper.insertMessage(aiMsg);
+
+        sendSse(emitter, "message", chatReply);
+        if (analysisId != null)
+        {
+            sendSse(emitter, "dashboard", String.valueOf(analysisId));
         }
     }
 
+    private void executeForensic(Long conversationId, ChatTask task, String userInput, SseEmitter emitter)
+    {
+        String projectName = task.getProjectName();
+        if (projectName == null || projectName.isBlank())
+        {
+            persistAndSend(conversationId, "⚠ 无法识别要生成取证单的项目名称。", emitter);
+            return;
+        }
+
+        String issue = userInput.replaceAll("请|为|的|生成取证单|出具取证|取证单|【|】", "")
+                .replaceAll(projectName, "").trim();
+        if (issue.isBlank()) issue = projectName + "项目审计问题";
+
+        String projectContext = null;
+        try { projectContext = projectDocService.getMergedProjectTextByProjectName(projectName); }
+        catch (Exception e) { log.warn("读取项目资料失败: {}", e.getMessage()); }
+
+        com.ruoyi.system.domain.ForensicDraft draft =
+                ((AiForensicServiceImpl) aiForensicService).generateDraft(issue, null, projectName, projectContext);
+
+        if (draft == null)
+        {
+            persistAndSend(conversationId, "⚠ 取证单生成失败。", emitter);
+            return;
+        }
+
+        StringBuilder reply = new StringBuilder("## 📋 审计取证单\n\n");
+        if (draft.getSuggestion() != null && !draft.getSuggestion().isBlank())
+            reply.append(draft.getSuggestion());
+        else
+            reply.append("**项目：**").append(projectName).append("\n**问题：**").append(issue).append("\n（内容生成失败）");
+        reply.append("\n\n---\n*取证单已保存，编号：").append(draft.getId()).append("*");
+
+        persistAndSend(conversationId, reply.toString(), emitter);
+    }
+
     /**
-     * 普通 RAG 问答
+     * 通用流式任务执行器（风险扫描/文档核查共用）
+     * 阻塞等待流式完成，供多任务循环使用
      */
-    private void handleNormalChat(Long conversationId, String userInput, SseEmitter emitter)
+    private void executeStreamingTask(Long conversationId, ChatTask task, String userInput, SseEmitter emitter, String systemPrompt)
+    {
+        if (systemPrompt == null)
+        {
+            persistAndSend(conversationId, "⚠ 无法执行该任务（缺少项目资料）。", emitter);
+            return;
+        }
+        executeStreamingWithPrompt(conversationId, systemPrompt, userInput, emitter);
+    }
+
+    /**
+     * 流式问答（阻塞等待完成）
+     */
+    private void executeStreamingWithPrompt(Long conversationId, String systemPrompt, String userInput, SseEmitter emitter)
+    {
+        List<ChatMessage> messages = new ArrayList<>();
+        messages.add(SystemMessage.from(systemPrompt));
+
+        List<com.ruoyi.system.domain.AiMessage> history = aiChatMapper.selectMessagesByConversationId(conversationId);
+        int max = modelProps.getMaxHistoryMessages();
+        int start = Math.max(0, history.size() - max);
+        for (int i = start; i < history.size(); i++)
+        {
+            com.ruoyi.system.domain.AiMessage m = history.get(i);
+            if ("user".equals(m.getRole())) messages.add(UserMessage.from(m.getContent()));
+            else messages.add(AiMessage.from(m.getContent()));
+        }
+
+        CountDownLatch latch = new CountDownLatch(1);
+        StringBuilder fullReply = new StringBuilder();
+
+        streamingModel.generate(messages, new StreamingResponseHandler<AiMessage>()
+        {
+            @Override
+            public void onNext(String token)
+            {
+                fullReply.append(token);
+                sendSse(emitter, "message", token);
+            }
+
+            @Override
+            public void onComplete(Response<AiMessage> response)
+            {
+                if (fullReply.length() > 0)
+                {
+                    com.ruoyi.system.domain.AiMessage aiMsg = new com.ruoyi.system.domain.AiMessage();
+                    aiMsg.setConversationId(conversationId);
+                    aiMsg.setRole("assistant");
+                    aiMsg.setContent(fullReply.toString());
+                    if (response.tokenUsage() != null)
+                        aiMsg.setTokens(response.tokenUsage().totalTokenCount());
+                    aiChatMapper.insertMessage(aiMsg);
+                }
+                latch.countDown();
+            }
+
+            @Override
+            public void onError(Throwable error)
+            {
+                log.error("流式调用异常: {}", error.getMessage());
+                if (fullReply.length() > 0)
+                    sendSse(emitter, "message", "\n\n---\n*⚠ AI 响应中断*");
+                else
+                    sendSse(emitter, "message", "⚠ AI 服务异常：" + error.getMessage());
+                latch.countDown();
+            }
+        });
+
+        // 阻塞等待流式完成（最多120秒）
+        try { latch.await(120, TimeUnit.SECONDS); }
+        catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+    }
+
+    /**
+     * 普通 RAG 问答（阻塞等待完成）
+     */
+    private void executeNormalChat(Long conversationId, String userInput, SseEmitter emitter)
     {
         final IAuditRagService.RagContext ragCtx = auditRagService.executeRag(userInput);
-        final List<String> citedIds = new ArrayList<>();
-        final long startTime = System.currentTimeMillis();
-
         List<ChatMessage> messages = buildMessages(conversationId, ragCtx.getAugmentedSystemPrompt());
 
-        int totalChars = 0;
-        for (ChatMessage cm : messages)
-        {
-            totalChars += cm.toString().length();
-        }
-        log.info("发送AI请求: msgCount={}, totalChars={}, queryLen={}", messages.size(), totalChars, userInput.length());
-
+        CountDownLatch latch = new CountDownLatch(1);
         StringBuilder fullReply = new StringBuilder();
+        final long startTime = System.currentTimeMillis();
 
         streamingModel.generate(messages, new StreamingResponseHandler<AiMessage>()
         {
@@ -700,103 +419,95 @@ public class AiChatServiceImpl implements IAiChatService
                     }
                     aiChatMapper.insertMessage(aiMsg);
 
-                    citedIds.addAll(auditRagService.extractCitedBasisIds(fullReply.toString()));
+                    List<String> citedIds = auditRagService.extractCitedBasisIds(fullReply.toString());
                     long elapsed = System.currentTimeMillis() - startTime;
                     auditRagService.logAiCall(userInput, fullReply.toString(),
                             ragCtx.getIntent(), citedIds, tokens, elapsed, 1);
                 }
-
-                sendSse(emitter, "done", "[DONE]");
-                emitter.complete();
+                latch.countDown();
             }
 
             @Override
             public void onError(Throwable error)
             {
-                log.error("LangChain4j 流式调用异常: {} (queryLen={})", error.getMessage(), userInput.length());
-
+                log.error("RAG 流式异常: {}", error.getMessage());
                 if (fullReply.length() > 0)
-                {
-                    com.ruoyi.system.domain.AiMessage aiMsg = new com.ruoyi.system.domain.AiMessage();
-                    aiMsg.setConversationId(conversationId);
-                    aiMsg.setRole("assistant");
-                    aiMsg.setContent(fullReply.toString() + "\n\n---\n*⚠ AI服务响应中断，以上为已生成的部分内容。请尝试缩短提问或刷新后重试。*");
-                    aiChatMapper.insertMessage(aiMsg);
-                    sendSse(emitter, "message", "\n\n---\n*⚠ AI服务响应中断，以上为已生成的部分内容。请尝试缩短提问或刷新后重试。*");
-                }
+                    sendSse(emitter, "message", "\n\n---\n*⚠ AI 响应中断*");
                 else
-                {
-                    String fallback = "⚠ AI 服务暂时不可用（" + error.getMessage() + "）。建议：\n"
-                            + "1. 缩短提问内容后重试\n"
-                            + "2. 检查网络连接\n"
-                            + "3. 联系管理员检查 API 配额";
-                    sendSse(emitter, "message", fallback);
-                }
-                sendSse(emitter, "done", "[DONE]");
-                emitter.complete();
+                    sendSse(emitter, "message", "⚠ AI 服务异常：" + error.getMessage());
+                latch.countDown();
             }
         });
+
+        try { latch.await(120, TimeUnit.SECONDS); }
+        catch (InterruptedException e) { Thread.currentThread().interrupt(); }
     }
 
-    private void persistAndSendAssistantMessage(Long conversationId, String content, SseEmitter emitter)
+    // ================================================================
+    // Prompt 构建
+    // ================================================================
+
+    private String buildRiskScanPrompt(ChatTask task)
+    {
+        String projectName = task.getProjectName();
+        if (projectName == null || projectName.isBlank()) return null;
+        String dataText = projectDocService.getMergedProjectTextByProjectName(projectName);
+        if (dataText == null || dataText.isBlank()) return null;
+        String truncated = dataText.length() > 8000 ? dataText.substring(0, 8000) + "\n..." : dataText;
+        return "你是专业审计风险分析师。请基于"" + projectName + ""的资料分析风险点。\n"
+                + "按高/中/低风险分类，每项说明风险描述、影响和建议。\n\n"
+                + "--- 项目资料 ---\n" + truncated + "\n--- 结束 ---";
+    }
+
+    private String buildDocCheckPrompt(ChatTask task)
+    {
+        String projectName = task.getProjectName();
+        if (projectName == null || projectName.isBlank()) return null;
+        String dataText = projectDocService.getMergedProjectTextByProjectName(projectName);
+        if (dataText == null || dataText.isBlank()) return null;
+        String truncated = dataText.length() > 8000 ? dataText.substring(0, 8000) + "\n..." : dataText;
+        return "你是专业审计文档核查专家。请对"" + projectName + ""的文档进行合规性核查。\n"
+                + "检查完整性、数据一致性、程序合规性、异常项。\n\n"
+                + "--- 项目资料 ---\n" + truncated + "\n--- 结束 ---";
+    }
+
+    // ================================================================
+    // 工具方法
+    // ================================================================
+
+    /**
+     * 持久化并发送消息（不发 done，不 complete）
+     */
+    private void persistAndSend(Long conversationId, String content, SseEmitter emitter)
     {
         com.ruoyi.system.domain.AiMessage aiMsg = new com.ruoyi.system.domain.AiMessage();
         aiMsg.setConversationId(conversationId);
         aiMsg.setRole("assistant");
         aiMsg.setContent(content);
         aiChatMapper.insertMessage(aiMsg);
-
         sendSse(emitter, "message", content);
-        sendSse(emitter, "done", "[DONE]");
-        emitter.complete();
     }
 
-    // ----------------------------------------------------------------
-    // 私有工具方法
-    // ----------------------------------------------------------------
-
-    /**
-     * 构建发送给 AI 的完整消息列表
-     */
     private List<ChatMessage> buildMessages(Long conversationId, String augmentedPrompt)
     {
         List<com.ruoyi.system.domain.AiMessage> history = aiChatMapper.selectMessagesByConversationId(conversationId);
         List<ChatMessage> list = new ArrayList<>();
-
         if (augmentedPrompt != null && !augmentedPrompt.isEmpty())
-        {
             list.add(SystemMessage.from(augmentedPrompt));
-        }
-
         int max = modelProps.getMaxHistoryMessages();
         int start = Math.max(0, history.size() - max);
         for (int i = start; i < history.size(); i++)
         {
             com.ruoyi.system.domain.AiMessage m = history.get(i);
-            if ("user".equals(m.getRole()))
-            {
-                list.add(UserMessage.from(m.getContent()));
-            }
-            else
-            {
-                list.add(AiMessage.from(m.getContent()));
-            }
+            if ("user".equals(m.getRole())) list.add(UserMessage.from(m.getContent()));
+            else list.add(AiMessage.from(m.getContent()));
         }
         return list;
     }
 
-    /**
-     * 安全发送 SSE
-     */
     private void sendSse(SseEmitter emitter, String event, String data)
     {
-        try
-        {
-            emitter.send(SseEmitter.event().name(event).data(data));
-        }
-        catch (Exception e)
-        {
-            log.warn("SSE 推送失败，客户端可能已断开连接: event={}", event);
-        }
+        try { emitter.send(SseEmitter.event().name(event).data(data)); }
+        catch (Exception e) { log.warn("SSE 推送失败: event={}", event); }
     }
 }
