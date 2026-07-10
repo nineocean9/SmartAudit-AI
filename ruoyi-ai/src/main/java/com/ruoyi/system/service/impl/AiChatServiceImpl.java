@@ -201,10 +201,10 @@ public class AiChatServiceImpl implements IAiChatService
                 {
                     var d = docs.get(i);
                     sb.append(i + 1).append(". ")
-                      .append(d.getFileName())
-                      .append("（")
-                      .append(d.getDocType() != null ? d.getDocType() : "其他资料")
-                      .append("）\n");
+                            .append(d.getFileName())
+                            .append("（")
+                            .append(d.getDocType() != null ? d.getDocType() : "其他资料")
+                            .append("）\n");
                 }
                 summary = sb.toString();
             }
@@ -228,7 +228,7 @@ public class AiChatServiceImpl implements IAiChatService
             String projectName = task != null ? task.getProjectName() : null;
             if (projectName == null || projectName.isBlank())
             {
-                persistAndSendAssistantMessage(conversationId, “⚠ 无法识别要查询的项目名称，请指明项目。”, emitter);
+                persistAndSendAssistantMessage(conversationId, "⚠ 无法识别要查询的项目名称，请指明项目。", emitter);
                 return;
             }
 
@@ -241,17 +241,17 @@ public class AiChatServiceImpl implements IAiChatService
                 if (docs == null || docs.isEmpty())
                 {
                     persistAndSendAssistantMessage(conversationId,
-                            “⚠ 项目库中未检索到与”” + projectName + “”相关的资料。请先上传相关文件。”, emitter);
+                            "⚠ 项目库中未检索到与" + projectName + "相关的资料。请先上传相关文件。", emitter);
                 }
                 else
                 {
                     StringBuilder sb = new StringBuilder();
-                    sb.append(projectName).append(“ 项目中包含以下资料，但文档内容无法解析：\n”);
+                    sb.append(projectName).append(" 项目中包含以下资料，但文档内容无法解析：\n");
                     for (int i = 0; i < docs.size(); i++)
                     {
                         var d = docs.get(i);
-                        sb.append(i + 1).append(“. “).append(d.getFileName())
-                          .append(“（”).append(d.getDocType() != null ? d.getDocType() : “其他”).append(“）\n”);
+                        sb.append(i + 1).append(". ").append(d.getFileName())
+                                .append("（").append(d.getDocType() != null ? d.getDocType() : "其他").append("）\n");
                     }
                     persistAndSendAssistantMessage(conversationId, sb.toString(), emitter);
                 }
@@ -259,12 +259,12 @@ public class AiChatServiceImpl implements IAiChatService
             }
 
             // 截取避免超长
-            String truncated = dataText.length() > 8000 ? dataText.substring(0, 8000) + “\n...(已截取)” : dataText;
+            String truncated = dataText.length() > 8000 ? dataText.substring(0, 8000) + "\n...(已截取)" : dataText;
 
             // 构建消息：系统提示 + 文档内容 + 用户原始问题 → AI 流式回答
-            String systemPrompt = “你是一个专业的审计助手。以下是”” + projectName + “”项目的文档资料内容。”
-                    + “请根据这些资料回答用户的问题。如果资料中没有相关信息，请如实说明。\n\n”
-                    + “--- 项目资料开始 ---\n” + truncated + “\n--- 项目资料结束 ---”;
+            String systemPrompt = "你是一个专业的审计助手。以下是\"" + projectName + "\"项目的文档资料内容。"
+                    + "请根据这些资料回答用户的问题。如果资料中没有相关信息，请如实说明。\n\n"
+                    + "--- 项目资料开始 ---\n" + truncated + "\n--- 项目资料结束 ---";
 
             List<ChatMessage> messages = new ArrayList<>();
             messages.add(SystemMessage.from(systemPrompt));
@@ -276,7 +276,7 @@ public class AiChatServiceImpl implements IAiChatService
             for (int i = start; i < history.size(); i++)
             {
                 com.ruoyi.system.domain.AiMessage m = history.get(i);
-                if (“user”.equals(m.getRole()))
+                if ("user".equals(m.getRole()))
                 {
                     messages.add(UserMessage.from(m.getContent()));
                 }
@@ -294,7 +294,7 @@ public class AiChatServiceImpl implements IAiChatService
                 public void onNext(String token)
                 {
                     fullReply.append(token);
-                    sendSse(emitter, “message”, token);
+                    sendSse(emitter, "message", token);
                 }
 
                 @Override
@@ -304,7 +304,7 @@ public class AiChatServiceImpl implements IAiChatService
                     {
                         com.ruoyi.system.domain.AiMessage aiMsg = new com.ruoyi.system.domain.AiMessage();
                         aiMsg.setConversationId(conversationId);
-                        aiMsg.setRole(“assistant”);
+                        aiMsg.setRole("assistant");
                         aiMsg.setContent(fullReply.toString());
                         if (response.tokenUsage() != null)
                         {
@@ -312,36 +312,36 @@ public class AiChatServiceImpl implements IAiChatService
                         }
                         aiChatMapper.insertMessage(aiMsg);
                     }
-                    sendSse(emitter, “done”, “[DONE]”);
+                    sendSse(emitter, "done", "[DONE]");
                     emitter.complete();
                 }
 
                 @Override
                 public void onError(Throwable error)
                 {
-                    log.error(“项目问答流式调用异常: {}”, error.getMessage());
+                    log.error("项目问答流式调用异常: {}", error.getMessage());
                     if (fullReply.length() > 0)
                     {
                         com.ruoyi.system.domain.AiMessage aiMsg = new com.ruoyi.system.domain.AiMessage();
                         aiMsg.setConversationId(conversationId);
-                        aiMsg.setRole(“assistant”);
-                        aiMsg.setContent(fullReply.toString() + “\n\n---\n*⚠ AI 响应中断*”);
+                        aiMsg.setRole("assistant");
+                        aiMsg.setContent(fullReply.toString() + "\n\n---\n*⚠ AI 响应中断*");
                         aiChatMapper.insertMessage(aiMsg);
-                        sendSse(emitter, “message”, “\n\n---\n*⚠ AI 响应中断*”);
+                        sendSse(emitter, "message", "\n\n---\n*⚠ AI 响应中断*");
                     }
                     else
                     {
-                        sendSse(emitter, “message”, “⚠ AI 服务异常：” + error.getMessage());
+                        sendSse(emitter, "message", "⚠ AI 服务异常：" + error.getMessage());
                     }
-                    sendSse(emitter, “done”, “[DONE]”);
+                    sendSse(emitter, "done", "[DONE]");
                     emitter.complete();
                 }
             });
         }
         catch (Exception e)
         {
-            log.error(“项目资料问答失败”, e);
-            persistAndSendAssistantMessage(conversationId, “⚠ 项目资料问答失败：” + e.getMessage(), emitter);
+            log.error("项目资料问答失败", e);
+            persistAndSendAssistantMessage(conversationId, "⚠ 项目资料问答失败：" + e.getMessage(), emitter);
         }
     }
 
@@ -363,7 +363,7 @@ public class AiChatServiceImpl implements IAiChatService
             if (dataText == null || dataText.isBlank())
             {
                 persistAndSendAssistantMessage(conversationId,
-                        "⚠ 项目库中未检索到与“" + projectName + "”相关的可分析资料。请先上传相关预算/收入/支出文件。",
+                        "⚠ 项目库中未检索到与\"" + projectName + "\"相关的可分析资料。请先上传相关预算/收入/支出文件。",
                         emitter);
                 return;
             }
@@ -371,7 +371,7 @@ public class AiChatServiceImpl implements IAiChatService
             Map<String, Object> analysis = dataAnalyzeService.analyzeChart(
                     dataText, projectName, projectName, null, "chat", username);
             Object analysisId = analysis.get("analysisId");
-            String chatReply = "已为“" + projectName + "”生成数据驾驶舱，请点击下方链接查看完整图表与审计分析。";
+            String chatReply = "已为\"" + projectName + "\"生成数据驾驶舱，请点击下方链接查看完整图表与审计分析。";
 
             com.ruoyi.system.domain.AiMessage aiMsg = new com.ruoyi.system.domain.AiMessage();
             aiMsg.setConversationId(conversationId);
@@ -412,13 +412,13 @@ public class AiChatServiceImpl implements IAiChatService
             if (dataText == null || dataText.isBlank())
             {
                 persistAndSendAssistantMessage(conversationId,
-                        "⚠ 项目库中未检索到与"" + projectName + ""相关的资料，无法进行风险扫描。请先上传相关文件。", emitter);
+                        "⚠ 项目库中未检索到与\"" + projectName + "\"相关的资料，无法进行风险扫描。请先上传相关文件。", emitter);
                 return;
             }
 
             String truncated = dataText.length() > 8000 ? dataText.substring(0, 8000) + "\n...(已截取)" : dataText;
 
-            String systemPrompt = "你是一个专业的审计风险分析师。以下是"" + projectName + ""项目的文档资料内容。"
+            String systemPrompt = "你是一个专业的审计风险分析师。以下是\"" + projectName + "\"项目的文档资料内容。"
                     + "请根据这些资料，深入分析该项目可能存在的审计风险点。\n"
                     + "要求：\n"
                     + "1. 按高风险、中风险、低风险分类列出\n"
@@ -507,13 +507,13 @@ public class AiChatServiceImpl implements IAiChatService
             if (dataText == null || dataText.isBlank())
             {
                 persistAndSendAssistantMessage(conversationId,
-                        "⚠ 项目库中未检索到与"" + projectName + ""相关的资料，无法进行文档核查。请先上传相关文件。", emitter);
+                        "⚠ 项目库中未检索到与\"" + projectName + "\"相关的资料，无法进行文档核查。请先上传相关文件。", emitter);
                 return;
             }
 
             String truncated = dataText.length() > 8000 ? dataText.substring(0, 8000) + "\n...(已截取)" : dataText;
 
-            String systemPrompt = "你是一个专业的审计文档合规审查员。以下是"" + projectName + ""项目的文档资料内容。"
+            String systemPrompt = "你是一个专业的审计文档合规审查员。以下是\"" + projectName + "\"项目的文档资料内容。"
                     + "请对这些文档进行全面的合规性核查。\n"
                     + "要求：\n"
                     + "1. 检查文档的完整性（是否缺少必要的审计文件）\n"

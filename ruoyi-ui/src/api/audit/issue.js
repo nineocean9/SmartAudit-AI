@@ -24,3 +24,13 @@ export function updateIssue(data) {
 export function deleteIssue(ids) {
   return request({ url: '/audit/issue/' + ids, method: 'delete' })
 }
+
+// 获取项目列表（下拉选择）
+export function listProjects() {
+  return request({ url: '/audit/issue/projects', method: 'get' })
+}
+
+// 获取审计依据列表（下拉选择）
+export function listBasisOptions() {
+  return request({ url: '/audit/issue/basis-options', method: 'get' })
+}

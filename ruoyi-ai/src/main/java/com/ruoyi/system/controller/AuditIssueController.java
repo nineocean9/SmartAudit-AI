@@ -227,4 +227,46 @@ public class AuditIssueController extends BaseController
         }
         catch (Exception e) { return error(e.getMessage()); }
     }
+
+    /** 获取项目列表（供下拉选择） */
+    @GetMapping("/projects")
+    public AjaxResult listProjects()
+    {
+        List<Map<String, Object>> list = new ArrayList<>();
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement("SELECT id, project_name FROM audit_project ORDER BY id");
+             ResultSet rs = ps.executeQuery())
+        {
+            while (rs.next())
+            {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("id", rs.getLong("id"));
+                m.put("projectName", rs.getString("project_name"));
+                list.add(m);
+            }
+        }
+        catch (Exception e) { /* ignore */ }
+        return success(list);
+    }
+
+    /** 获取审计依据列表（供下拉选择） */
+    @GetMapping("/basis-options")
+    public AjaxResult listBasis()
+    {
+        List<Map<String, Object>> list = new ArrayList<>();
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement("SELECT id, title FROM audit_basis WHERE status=1 ORDER BY id");
+             ResultSet rs = ps.executeQuery())
+        {
+            while (rs.next())
+            {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("id", rs.getLong("id"));
+                m.put("title", rs.getString("title"));
+                list.add(m);
+            }
+        }
+        catch (Exception e) { /* ignore */ }
+        return success(list);
+    }
 }

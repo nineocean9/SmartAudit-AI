@@ -2,7 +2,6 @@ package com.ruoyi.system.service.impl;
 
 import com.ruoyi.system.domain.AuditBasis;
 import com.ruoyi.system.mapper.AuditBasisMapper;
-import com.ruoyi.system.mapper.DocumentChunkMapper;
 import com.ruoyi.system.service.IEmbeddingService;
 import com.ruoyi.system.service.IKnowledgeManager;
 import com.ruoyi.system.service.IProjectDocService;

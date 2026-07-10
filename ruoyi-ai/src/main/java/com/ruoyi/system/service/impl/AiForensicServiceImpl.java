@@ -32,7 +32,12 @@ public class AiForensicServiceImpl implements IAiForensicService
         ForensicDraft draft = new ForensicDraft();
         draft.setIssue(issue);
         draft.setBasisIds(basisIds);
-        draft.setCreateBy(SecurityUtils.getUsername());
+        try {
+            draft.setCreateBy(SecurityUtils.getUsername());
+        } catch (Exception e) {
+            // 异步线程中 SecurityContext 不可用，使用默认值
+            draft.setCreateBy("system");
+        }
         forensicDraftMapper.insertForensicDraft(draft);
         return draft;
     }

@@ -7,7 +7,7 @@
       </el-form-item>
       <el-form-item label="项目" prop="projectId">
         <el-select v-model="queryParams.projectId" placeholder="选择项目" clearable filterable style="width:200px">
-          <el-option v-for="p in projectOptions" :key="p.id" :label="p.project_name" :value="p.id" />
+          <el-option v-for="p in projectOptions" :key="p.id" :label="p.projectName" :value="p.id" />
         </el-select>
       </el-form-item>
       <el-form-item label="严重度" prop="severity">
@@ -70,7 +70,7 @@
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
         <el-form-item label="项目" prop="projectId">
           <el-select v-model="form.projectId" placeholder="选择项目" filterable style="width:100%">
-            <el-option v-for="p in projectOptions" :key="p.id" :label="p.project_name" :value="p.id" />
+            <el-option v-for="p in projectOptions" :key="p.id" :label="p.projectName" :value="p.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="问题描述" prop="issueDesc">
@@ -105,11 +105,9 @@
 
 <script setup>
 import { ref, reactive } from 'vue'
-import { listIssues, getIssue, addIssue, updateIssue, deleteIssue } from '@/api/audit/issue'
+import { listIssues, getIssue, addIssue, updateIssue, deleteIssue, listProjects, listBasisOptions } from '@/api/audit/issue'
 import { addRectification } from '@/api/audit/rectification'
-import { getProgress } from '@/api/audit/auditInfo'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import request from '@/utils/request'
 
 // 查询参数
 const queryParams = ref({ pageNum: 1, pageSize: 10, keyword: '', projectId: null, severity: null })
@@ -137,14 +135,12 @@ const basisOptions = ref([])
 
 /** 加载项目列表 */
 function loadProjects() {
-  getProgress().then(r => { projectOptions.value = r.data || [] })
+  listProjects().then(r => { projectOptions.value = r.data || [] })
 }
 
 /** 加载依据列表 */
 function loadBasis() {
-  request({ url: '/basis/list', method: 'get', params: { pageNum: 1, pageSize: 999 } }).then(r => {
-    basisOptions.value = r.rows || []
-  })
+  listBasisOptions().then(r => { basisOptions.value = r.data || [] })
 }
 
 /** 查询列表 */
