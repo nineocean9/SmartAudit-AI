@@ -193,7 +193,7 @@ public class AiChatServiceImpl implements IAiChatService
             {
                 var d = docs.get(i);
                 sb.append(i + 1).append(". ").append(d.getFileName())
-                  .append("（").append(d.getDocType() != null ? d.getDocType() : "其他").append("）\n");
+                        .append("（").append(d.getDocType() != null ? d.getDocType() : "其他").append("）\n");
             }
             summary = sb.toString();
         }
@@ -215,7 +215,7 @@ public class AiChatServiceImpl implements IAiChatService
             List<com.ruoyi.system.domain.ProjectDocument> docs = projectDocService.listProjectDocsByProjectName(projectName);
             if (docs == null || docs.isEmpty())
             {
-                persistAndSend(conversationId, "⚠ 未检索到"" + projectName + ""的资料。", emitter);
+                persistAndSend(conversationId, "⚠ 未检索到\"" + projectName + "\"的资料。", emitter);
             }
             else
             {
@@ -228,7 +228,7 @@ public class AiChatServiceImpl implements IAiChatService
         }
 
         String truncated = dataText.length() > 8000 ? dataText.substring(0, 8000) + "\n..." : dataText;
-        String systemPrompt = "你是专业审计助手。以下是"" + projectName + ""的文档资料。请根据资料回答用户的问题。\n\n"
+        String systemPrompt = "你是专业审计助手。以下是\"" + projectName + "\"的文档资料。请根据资料回答用户的问题。\n\n"
                 + "--- 项目资料 ---\n" + truncated + "\n--- 结束 ---";
 
         executeStreamingWithPrompt(conversationId, systemPrompt, userInput, emitter);
@@ -246,14 +246,14 @@ public class AiChatServiceImpl implements IAiChatService
         String dataText = projectDocService.getMergedProjectTextByProjectName(projectName);
         if (dataText == null || dataText.isBlank())
         {
-            persistAndSend(conversationId, "⚠ 未找到"" + projectName + ""的可分析资料。", emitter);
+            persistAndSend(conversationId, "⚠ 未找到\"" + projectName + "\"的可分析资料。", emitter);
             return;
         }
 
         Map<String, Object> analysis = dataAnalyzeService.analyzeChart(
                 dataText, projectName, projectName, null, "chat", username);
         Object analysisId = analysis.get("analysisId");
-        String chatReply = "已为"" + projectName + ""生成数据驾驶舱，请点击下方链接查看。";
+        String chatReply = "已为\"" + projectName + "\"生成数据驾驶舱，请点击下方链接查看。";
 
         com.ruoyi.system.domain.AiMessage aiMsg = new com.ruoyi.system.domain.AiMessage();
         aiMsg.setConversationId(conversationId);
@@ -454,7 +454,7 @@ public class AiChatServiceImpl implements IAiChatService
         String dataText = projectDocService.getMergedProjectTextByProjectName(projectName);
         if (dataText == null || dataText.isBlank()) return null;
         String truncated = dataText.length() > 8000 ? dataText.substring(0, 8000) + "\n..." : dataText;
-        return "你是专业审计风险分析师。请基于"" + projectName + ""的资料分析风险点。\n"
+        return "你是专业审计风险分析师。请基于\"" + projectName + "\"的资料分析风险点。\n"
                 + "按高/中/低风险分类，每项说明风险描述、影响和建议。\n\n"
                 + "--- 项目资料 ---\n" + truncated + "\n--- 结束 ---";
     }
@@ -466,7 +466,7 @@ public class AiChatServiceImpl implements IAiChatService
         String dataText = projectDocService.getMergedProjectTextByProjectName(projectName);
         if (dataText == null || dataText.isBlank()) return null;
         String truncated = dataText.length() > 8000 ? dataText.substring(0, 8000) + "\n..." : dataText;
-        return "你是专业审计文档核查专家。请对"" + projectName + ""的文档进行合规性核查。\n"
+        return "你是专业审计文档核查专家。请对\"" + projectName + "\"的文档进行合规性核查。\n"
                 + "检查完整性、数据一致性、程序合规性、异常项。\n\n"
                 + "--- 项目资料 ---\n" + truncated + "\n--- 结束 ---";
     }

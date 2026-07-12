@@ -68,6 +68,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Folder, Document } from '@element-plus/icons-vue'
 import { getToken } from '@/utils/auth'
@@ -76,6 +77,7 @@ import { listProjectDoc, deleteProjectDoc, getProjectDocContent } from '@/api/au
 import { createTempSession } from '@/api/knowledge/tempWorkspace'
 import FileUploader from '@/components/AiChat/FileUploader.vue'
 
+const router = useRouter()
 const projectTree = ref([])
 const curProjectId = ref(null)
 const curProjectName = ref('')
@@ -160,7 +162,13 @@ function formatSize(bytes) {
 }
 
 function viewDoc(doc) {
-  // 直接用 doc 中的 contentText（列表接口已返回该字段）
+  // Excel 文件 → 跳转到独立表格查看页
+  const ext = doc.fileName?.split('.').pop()?.toLowerCase()
+  if (ext === 'xlsx' || ext === 'xls') {
+    router.push(`/audit/excel-view?id=${doc.id}`)
+    return
+  }
+  // 其他文件 → 弹窗显示纯文本
   const content = doc.contentText || ''
   console.log('viewDoc content length:', content.length)
   if (content.startsWith('[文件:')) {

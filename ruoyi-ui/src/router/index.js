@@ -120,10 +120,21 @@ export const constantRoutes = [
         meta: { title: '审计问题管理', icon: 'bug' }
       }
     ]
+  },
+  {
+    path: '/audit/excel-view',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/audit/excelView'),
+        name: 'ExcelView',
+        meta: { title: 'Excel 查看', icon: 'table' }
+      }
+    ]
   }
 ]
-
-// 动态路由，基于用户权限动态去加载
 export const dynamicRoutes = [
   {
     path: '/system/user-auth',
