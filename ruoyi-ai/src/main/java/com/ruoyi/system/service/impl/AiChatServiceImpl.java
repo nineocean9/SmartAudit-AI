@@ -228,7 +228,9 @@ public class AiChatServiceImpl implements IAiChatService
         }
 
         String truncated = dataText.length() > 8000 ? dataText.substring(0, 8000) + "\n..." : dataText;
-        String systemPrompt = "你是专业审计助手。以下是\"" + projectName + "\"的文档资料。请根据资料回答用户的问题。\n\n"
+        String systemPrompt = "你是专业审计助手。以下是"" + projectName + ""的文档资料。\n"
+                + "请仅根据资料回答用户关于该项目内容和数据的问题。\n"
+                + "注意：不要生成图表、驾驶舱、取证单等内容，只做文字回答。\n\n"
                 + "--- 项目资料 ---\n" + truncated + "\n--- 结束 ---";
 
         executeStreamingWithPrompt(conversationId, systemPrompt, userInput, emitter);

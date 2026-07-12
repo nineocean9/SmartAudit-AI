@@ -175,33 +175,63 @@ public class ProjectDocController extends BaseController
                 Map<String, Object> sheetData = new LinkedHashMap<>();
                 sheetData.put("name", sheet.getSheetName());
 
-                List<String> headers = new ArrayList<>();
-                List<List<String>> rows = new ArrayList<>();
-
-                boolean firstRow = true;
+                // 第一遍：读取所有行，计算最大列数
+                List<List<String>> allRows = new ArrayList<>();
+                int maxCols = 0;
                 for (Row row : sheet)
                 {
                     List<String> cells = new ArrayList<>();
                     int lastCol = row.getLastCellNum();
+                    if (lastCol > maxCols) maxCols = lastCol;
                     for (int c = 0; c < lastCol; c++)
                     {
                         Cell cell = row.getCell(c);
                         cells.add(cell != null ? formatter.formatCellValue(cell) : "");
                     }
+                    allRows.add(cells);
+                }
 
-                    if (firstRow)
+                // 补齐每行到最大列数
+                for (List<String> r : allRows)
+                {
+                    while (r.size() < maxCols) r.add("");
+                }
+
+                // 判断第一行是否适合做表头：
+                // 条件：至少2列有内容，且内容都不像纯数字
+                List<String> firstRow = allRows.isEmpty() ? List.of() : allRows.get(0);
+                boolean firstRowIsHeader = false;
+                if (!firstRow.isEmpty() && allRows.size() > 1)
+                {
+                    long nonEmpty = firstRow.stream().filter(s -> s != null && !s.isBlank()).count();
+                    long numericCount = firstRow.stream()
+                            .filter(s -> s != null && !s.isBlank() && s.matches("^-?[\\d,]+\\.?\\d*%?$"))
+                            .count();
+                    // 至少2列有内容，且大多数不是纯数字 → 可能是表头
+                    firstRowIsHeader = nonEmpty >= 2 && numericCount <= nonEmpty / 2;
+                }
+
+                List<String> headers;
+                List<List<String>> dataRows;
+                if (firstRowIsHeader)
+                {
+                    headers = firstRow;
+                    dataRows = allRows.subList(1, allRows.size());
+                }
+                else
+                {
+                    // 自动生成列名 A, B, C, ...
+                    headers = new ArrayList<>();
+                    for (int c = 0; c < maxCols; c++)
                     {
-                        headers.addAll(cells);
-                        firstRow = false;
+                        headers.add(String.valueOf((char) ('A' + (c % 26))) + (c >= 26 ? String.valueOf(c / 26) : ""));
                     }
-                    else
-                    {
-                        rows.add(cells);
-                    }
+                    dataRows = allRows;
                 }
 
                 sheetData.put("headers", headers);
-                sheetData.put("rows", rows);
+                sheetData.put("rows", dataRows);
+                sheetData.put("headerFromData", firstRowIsHeader);
                 sheets.add(sheetData);
             }
             wb.close();
@@ -334,17 +364,19 @@ public class ProjectDocController extends BaseController
 
         int sheetIdx = Integer.parseInt(body.getOrDefault("sheetIndex", "0").toString());
         int rowIdx = Integer.parseInt(body.get("rowIndex").toString());
+        // headerOffset: 1 if first row is header, 0 if auto-generated headers
+        int headerOffset = Integer.parseInt(body.getOrDefault("headerOffset", "1").toString());
 
         try (FileInputStream fis = new FileInputStream(file))
         {
             Workbook wb = "xlsx".equalsIgnoreCase(ext) ? new XSSFWorkbook(fis) : new HSSFWorkbook(fis);
             Sheet sheet = wb.getSheetAt(sheetIdx);
             int lastRow = sheet.getLastRowNum();
-            // +1 因为第0行是 header，data row 0 对应 sheet row 1
-            int actualRow = rowIdx + 1;
+            int actualRow = rowIdx + headerOffset;
             if (actualRow <= lastRow)
             {
-                sheet.removeRow(sheet.getRow(actualRow));
+                Row toRemove = sheet.getRow(actualRow);
+                if (toRemove != null) sheet.removeRow(toRemove);
                 if (actualRow < lastRow)
                 {
                     sheet.shiftRows(actualRow + 1, lastRow, -1);

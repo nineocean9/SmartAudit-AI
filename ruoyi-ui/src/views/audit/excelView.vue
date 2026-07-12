@@ -198,9 +198,10 @@ async function saveCell() {
   const originalRowIdx = currentSheet.value.rows.indexOf(originalRow)
 
   try {
+    const offset = currentSheet.value?.headerFromData ? 1 : 0
     const res = await updateExcelCell(docId.value, {
       sheetIndex: Number(activeSheet.value),
-      rowIndex: originalRowIdx + 1,
+      rowIndex: originalRowIdx + offset,
       colIndex: col,
       value: value
     })
@@ -252,13 +253,15 @@ async function handleDeleteRows() {
   } catch { return }
 
   const allRows = currentSheet.value.rows
+  const headerOffset = currentSheet.value?.headerFromData ? 1 : 0
   const indices = selectedRows.value.map(r => allRows.indexOf(r)).filter(i => i >= 0).sort((a, b) => b - a)
 
   for (const idx of indices) {
     try {
       await deleteExcelRow(docId.value, {
         sheetIndex: Number(activeSheet.value),
-        rowIndex: idx
+        rowIndex: idx,
+        headerOffset: headerOffset
       })
     } catch { /* continue */ }
   }
