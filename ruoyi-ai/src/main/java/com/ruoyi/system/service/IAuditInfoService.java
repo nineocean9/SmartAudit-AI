@@ -19,4 +19,11 @@ public interface IAuditInfoService
     int unbindPlanProject(Long planId, Long projectId);
     List<Map<String, Object>> selectPlanProjects(Long planId);
     List<Map<String, Object>> selectSchemeByPlan(Long planId);
+
+    // 闭环① 增强
+    int updatePlan(Map<String,Object> p);
+    int updateUnit(Map<String,Object> u);
+    int insertLeader(Map<String,Object> l);
+    int updateLeader(Map<String,Object> l);
+    int deleteLeaderByIds(Long[] ids);
 }

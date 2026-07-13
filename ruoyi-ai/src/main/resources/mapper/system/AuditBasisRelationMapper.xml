@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.AuditBasisRelationMapper">
+    <resultMap id="Result" type="AuditBasisRelation">
+        <id property="id" column="id"/><result property="basisId" column="basis_id"/>
+        <result property="relatedId" column="related_id"/><result property="relationType" column="relation_type"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+    <select id="selectByBasisId" resultMap="Result">SELECT * FROM audit_basis_relation WHERE basis_id=#{basisId} OR related_id=#{basisId} ORDER BY create_time</select>
+    <insert id="insert" parameterType="AuditBasisRelation" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO audit_basis_relation(basis_id,related_id,relation_type,create_time) VALUES(#{basisId},#{relatedId},#{relationType},now())</insert>
+    <delete id="deleteById">DELETE FROM audit_basis_relation WHERE id=#{id}</delete>
+</mapper>

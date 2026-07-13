@@ -40,6 +40,10 @@ public class AuditInfoServiceImpl implements IAuditInfoService
         var e = new com.ruoyi.system.domain.AuditUnit();
         e.setUnitName((String)u.get("unitName")); e.setUnitType((String)u.get("unitType"));
         e.setProfile((String)u.get("profile")); e.setHistoryAudit((String)u.get("historyAudit"));
+        e.setUnitCode((String)u.get("unitCode")); e.setParentLeader((String)u.get("parentLeader"));
+        Object sc = u.get("staffCount"); if(sc!=null) e.setStaffCount(Integer.parseInt(String.valueOf(sc)));
+        e.setFinanceContact((String)u.get("financeContact")); e.setContactPhone((String)u.get("contactPhone"));
+        e.setAddress((String)u.get("address"));
         return mapper.insertUnit(e);
     }
     public int deleteUnitByIds(Long[] ids) { return mapper.deleteUnitByIds(ids); }
@@ -71,4 +75,46 @@ public class AuditInfoServiceImpl implements IAuditInfoService
     public int unbindPlanProject(Long planId, Long projectId) { return mapper.unbindPlanProject(planId, projectId); }
     public List<Map<String, Object>> selectPlanProjects(Long planId) { return mapper.selectPlanProjects(planId); }
     public List<Map<String, Object>> selectSchemeByPlan(Long planId) { return mapper.selectSchemeByPlan(planId); }
+
+    // 闭环① 增强
+    public int updatePlan(Map<String,Object> p) {
+        var e = new com.ruoyi.system.domain.AuditPlan();
+        e.setId(Long.parseLong(String.valueOf(p.get("id"))));
+        e.setPlanType((String)p.get("planType"));
+        Object yearVal = p.get("planYear");
+        if (yearVal != null) e.setPlanYear(Integer.parseInt(String.valueOf(yearVal)));
+        e.setBatch((String)p.get("batch")); e.setPlanName((String)p.get("planName"));
+        e.setDescription((String)p.get("description"));
+        Object status = p.get("status");
+        if (status != null) e.setStatus(Integer.parseInt(String.valueOf(status)));
+        return mapper.updatePlan(e);
+    }
+    public int updateUnit(Map<String,Object> u) {
+        var e = new com.ruoyi.system.domain.AuditUnit();
+        e.setId(Long.parseLong(String.valueOf(u.get("id"))));
+        e.setUnitName((String)u.get("unitName")); e.setUnitType((String)u.get("unitType"));
+        e.setProfile((String)u.get("profile")); e.setHistoryAudit((String)u.get("historyAudit"));
+        e.setUnitCode((String)u.get("unitCode")); e.setParentLeader((String)u.get("parentLeader"));
+        Object sc = u.get("staffCount"); if(sc!=null) e.setStaffCount(Integer.parseInt(String.valueOf(sc)));
+        e.setFinanceContact((String)u.get("financeContact")); e.setContactPhone((String)u.get("contactPhone"));
+        e.setAddress((String)u.get("address"));
+        return mapper.updateUnit(e);
+    }
+    public int insertLeader(Map<String,Object> l) {
+        var e = new com.ruoyi.system.domain.AuditLeader();
+        e.setName((String)l.get("name"));
+        Object uid = l.get("unitId"); if(uid!=null) e.setUnitId(Long.parseLong(String.valueOf(uid)));
+        e.setPosition((String)l.get("position")); e.setGender((String)l.get("gender"));
+        e.setIdNumber((String)l.get("idNumber")); e.setManagedScope((String)l.get("managedScope"));
+        return mapper.insertLeader(e);
+    }
+    public int updateLeader(Map<String,Object> l) {
+        var e = new com.ruoyi.system.domain.AuditLeader();
+        e.setId(Long.parseLong(String.valueOf(l.get("id"))));
+        e.setName((String)l.get("name")); e.setPosition((String)l.get("position"));
+        e.setGender((String)l.get("gender")); e.setIdNumber((String)l.get("idNumber"));
+        e.setManagedScope((String)l.get("managedScope"));
+        return mapper.updateLeader(e);
+    }
+    public int deleteLeaderByIds(Long[] ids) { return mapper.deleteLeaderByIds(ids); }
 }

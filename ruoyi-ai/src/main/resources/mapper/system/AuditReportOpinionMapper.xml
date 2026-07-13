@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.AuditReportOpinionMapper">
+    <resultMap id="Result" type="AuditReportOpinion">
+        <id property="id" column="id"/><result property="reportId" column="report_id"/>
+        <result property="roundNo" column="round_no"/><result property="opinionType" column="opinion_type"/>
+        <result property="content" column="content"/><result property="attachment" column="attachment"/>
+        <result property="submitBy" column="submit_by"/><result property="submitTime" column="submit_time"/>
+    </resultMap>
+    <select id="selectByReportId" resultMap="Result">SELECT * FROM audit_report_opinion WHERE report_id=#{reportId} ORDER BY round_no, submit_time</select>
+    <insert id="insert" parameterType="AuditReportOpinion" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO audit_report_opinion(report_id,round_no,opinion_type,content,attachment,submit_by,submit_time)
+        VALUES(#{reportId},#{roundNo},#{opinionType},#{content},#{attachment},#{submitBy},now())</insert>
+</mapper>

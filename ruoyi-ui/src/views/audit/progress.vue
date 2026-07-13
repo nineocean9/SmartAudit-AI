@@ -1,45 +1,144 @@
 <template>
   <div class="app-container">
-    <el-row style="margin-bottom:15px">
-      <el-col :span="24">
-        <h3 style="margin:0">项目进度概览（甘特图）</h3>
+    <el-row :gutter="20">
+      <el-col :span="18">
+        <el-card shadow="hover">
+          <template #header><span style="font-weight:bold">📊 项目进度甘特图</span></template>
+          <div ref="ganttChart" style="height:500px"></div>
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card shadow="hover" class="mb20">
+          <template #header><span style="font-weight:bold">📈 进度概览</span></template>
+          <el-statistic title="总项目数" :value="stats.total"/>
+          <el-statistic title="实施中" :value="stats.active" class="mt10" style="color:#409EFF"/>
+          <el-statistic title="已归档" :value="stats.archived" class="mt10" style="color:#67C23A"/>
+          <el-statistic title="超期预警" :value="stats.overdue" class="mt10" style="color:#F56C6C"/>
+        </el-card>
+        <el-card shadow="hover">
+          <template #header><span style="font-weight:bold">👥 人员负载</span></template>
+          <div v-for="w in workload" :key="w.user_name" class="mb10">
+            <span>{{ w.user_name }} ({{ w.role_type }})</span>
+            <el-progress :percentage="Math.min(w.project_count * 25, 100)" :color="w.project_count > 3 ? '#F56C6C' : '#409EFF'" :format="() => w.project_count + '个项目'"/>
+          </div>
+          <el-empty v-if="!workload.length" description="暂无数据" :image-size="60"/>
+        </el-card>
       </el-col>
     </el-row>
-    <div v-loading="loading" style="height:400px">
-      <div v-for="(item,idx) in projects" :key="item.id" class="gantt-row">
-        <div class="gantt-label">{{ item.project_name }}<br><small>{{ item.audited_unit }} · {{ item.audit_type }}{{ item.audit_year }}</small></div>
-        <div class="gantt-bar-wrap">
-          <div class="gantt-bar" :class="barClass(item.status)" :style="barStyle(idx)">
-            <span class="gantt-text">{{ statusLabel(item.status) }}</span>
-          </div>
-          <div class="gantt-stats">
-            <el-tag size="small" :type="item.issue_count>0?'warning':'info'">{{ item.issue_count||0 }}问题</el-tag>
-            <el-tag size="small" type="success" style="margin-left:4px">{{ item.rect_count||0 }}已整改</el-tag>
-          </div>
-        </div>
-      </div>
-      <el-empty v-if="!loading && (!projects||projects.length===0)" description="暂无项目数据" />
-    </div>
+
+    <!-- 超期预警列表 -->
+    <el-card shadow="hover" class="mt20" v-if="overdueList.length">
+      <template #header><span style="font-weight:bold;color:#F56C6C">⚠️ 超期预警项目</span></template>
+      <el-table :data="overdueList" size="small">
+        <el-table-column label="项目名称" prop="project_name"/>
+        <el-table-column label="被审单位" prop="audited_unit"/>
+        <el-table-column label="审计类型" prop="audit_type" width="120"/>
+        <el-table-column label="问题数" prop="issue_count" width="80"/>
+      </el-table>
+    </el-card>
+
+    <!-- 项目列表 -->
+    <el-card shadow="hover" class="mt20">
+      <template #header><span style="font-weight:bold">📋 项目列表</span></template>
+      <el-table :data="projectList" @row-click="gotoProject">
+        <el-table-column label="项目名称" prop="project_name" width="200"/>
+        <el-table-column label="被审单位" prop="audited_unit" width="160"/>
+        <el-table-column label="审计类型" prop="audit_type" width="120"/>
+        <el-table-column label="年度" prop="audit_year" width="80"/>
+        <el-table-column label="阶段" prop="phase" width="80">
+          <template #default="scope"><el-tag size="small">{{ scope.row.phase || '准备' }}</el-tag></template>
+        </el-table-column>
+        <el-table-column label="进度" width="160">
+          <template #default="scope"><el-progress :percentage="scope.row.progress || 0" :color="scope.row.is_overdue ? '#F56C6C' : '#409EFF'"/></template>
+        </el-table-column>
+        <el-table-column label="状态" width="80">
+          <template #default="scope"><el-tag :type="['info','','success'][scope.row.status]">{{ ['未启动','实施中','已归档'][scope.row.status] }}</el-tag></template>
+        </el-table-column>
+        <el-table-column label="问题/整改" width="100">
+          <template #default="scope">{{ scope.row.issue_count || 0 }} / {{ scope.row.rect_count || 0 }}</template>
+        </el-table-column>
+      </el-table>
+    </el-card>
   </div>
 </template>
+
 <script setup>
-import { ref } from 'vue'; import { getProgress } from '@/api/audit/auditInfo'
-const projects=ref([]); const loading=ref(false)
-function load(){loading.value=true;getProgress().then(r=>{projects.value=r.data||[]}).finally(()=>loading.value=false)}
-function statusLabel(s){return s===2?'已归档':s===1?'实施中':'未启动'}
-function barClass(s){return s===2?'bar-done':s===1?'bar-progress':'bar-pending'}
-function barStyle(idx){return{width:60+idx*8+'%'}}
-load()
+import { ref, onMounted, nextTick, markRaw } from 'vue'
+import { useRouter } from 'vue-router'
+import request from '@/utils/request'
+
+const router = useRouter()
+const ganttChart = ref(null)
+const projectList = ref([])
+const workload = ref([])
+const overdueList = ref([])
+const stats = ref({ total: 0, active: 0, archived: 0, overdue: 0 })
+
+function loadData() {
+  request({ url: '/audit/info/progress' }).then(res => {
+    projectList.value = res.data || []
+    stats.value.total = projectList.value.length
+    stats.value.active = projectList.value.filter(p => p.status == 1).length
+    stats.value.archived = projectList.value.filter(p => p.status == 2).length
+    stats.value.overdue = projectList.value.filter(p => p.is_overdue == 1).length
+    overdueList.value = projectList.value.filter(p => p.is_overdue == 1)
+    nextTick(() => renderGantt())
+  })
+  request({ url: '/audit/prepare/workload' }).then(res => { workload.value = res.data || [] }).catch(() => {})
+}
+
+function renderGantt() {
+  if (!ganttChart.value || !projectList.value.length) return
+  const echarts = window.echarts || (typeof require !== 'undefined' ? require('echarts') : null)
+  if (!echarts) return
+
+  const chart = echarts.init(ganttChart.value)
+  const names = projectList.value.map(p => p.project_name)
+  const statusColors = { 0: '#909399', 1: '#409EFF', 2: '#67C23A' }
+
+  const data = projectList.value.map((p, i) => {
+    const year = p.audit_year || 2026
+    const start = p.start_date || year + '-01-01'
+    const end = p.end_date || year + '-12-31'
+    return {
+      name: p.project_name,
+      value: [i, new Date(start).getTime(), new Date(end).getTime(), p.status],
+      itemStyle: { color: p.is_overdue ? '#F56C6C' : statusColors[p.status] || '#409EFF' }
+    }
+  })
+
+  chart.setOption({
+    tooltip: { formatter: p => p.name + '<br/>' + (projectList.value[p.value[0]]?.audited_unit || '') },
+    grid: { left: '20%', right: '5%', top: '5%', bottom: '10%' },
+    xAxis: { type: 'time', min: '2025-01-01', max: '2027-01-01' },
+    yAxis: { type: 'category', data: names, inverse: true },
+    series: [{
+      type: 'custom',
+      renderItem: (params, api) => {
+        const catIdx = api.value(0)
+        const start = api.coord([api.value(1), catIdx])
+        const end = api.coord([api.value(2), catIdx])
+        const height = api.size([0, 1])[1] * 0.6
+        return { type: 'rect', shape: { x: start[0], y: start[1] - height / 2, width: end[0] - start[0], height: height }, style: api.style() }
+      },
+      encode: { x: [1, 2], y: 0 },
+      data: data
+    }]
+  })
+  window.addEventListener('resize', () => chart.resize())
+}
+
+function gotoProject(row) {
+  // 穿透跳转到项目详情
+  router.push({ path: '/audit/project', query: { projectId: row.id } }).catch(() => {})
+}
+
+onMounted(() => loadData())
 </script>
+
 <style scoped>
-.gantt-row{display:flex;align-items:center;margin-bottom:8px;padding:8px 0;border-bottom:1px solid #f0f0f0}
-.gantt-label{width:200px;font-size:13px;flex-shrink:0;line-height:1.4}
-.gantt-bar-wrap{flex:1;display:flex;align-items:center;gap:10px}
-.gantt-bar{height:30px;border-radius:6px;display:flex;align-items:center;padding:0 12px;transition:width 0.5s ease;min-width:80px}
-.gantt-text{color:#fff;font-size:12px;font-weight:500}
-.bar-done{background:linear-gradient(90deg,#67c23a,#95d475)}
-.bar-progress{background:linear-gradient(90deg,#409eff,#79bbff)}
-.bar-pending{background:linear-gradient(90deg,#909399,#c0c4cc)}
-.gantt-stats{white-space:nowrap}
-small{color:#909399;font-size:11px}
+.mt10 { margin-top: 10px; }
+.mt20 { margin-top: 20px; }
+.mb10 { margin-bottom: 10px; }
+.mb20 { margin-bottom: 20px; }
 </style>

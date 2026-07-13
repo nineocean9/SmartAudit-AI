@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.AuditArchiveMapper">
+    <resultMap id="Result" type="AuditArchive">
+        <id property="id" column="id"/><result property="projectId" column="project_id"/>
+        <result property="archiveNo" column="archive_no"/><result property="archiveStatus" column="archive_status"/>
+        <result property="archiveCategory" column="archive_category"/><result property="fileName" column="file_name"/>
+        <result property="filePath" column="file_path"/><result property="sortOrder" column="sort_order"/>
+        <result property="reviewBy" column="review_by"/><result property="reviewTime" column="review_time"/>
+        <result property="archiveTime" column="archive_time"/><result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/><result property="projectName" column="project_name"/>
+    </resultMap>
+    <select id="selectByProjectId" resultMap="Result">SELECT a.*,p.project_name FROM audit_archive a JOIN audit_project p ON p.id=a.project_id WHERE a.project_id=#{projectId} ORDER BY a.archive_category,a.sort_order</select>
+    <select id="selectList" resultMap="Result">SELECT a.*,p.project_name FROM audit_archive a JOIN audit_project p ON p.id=a.project_id
+        <where><if test="projectId!=null">AND a.project_id=#{projectId}</if><if test="archiveStatus!=null">AND a.archive_status=#{archiveStatus}</if></where>
+        ORDER BY a.create_time DESC</select>
+    <insert id="insert" parameterType="AuditArchive" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO audit_archive(project_id,archive_no,archive_status,archive_category,file_name,file_path,sort_order,create_by,create_time)
+        VALUES(#{projectId},#{archiveNo},0,#{archiveCategory},#{fileName},#{filePath},#{sortOrder},#{createBy},now())</insert>
+    <update id="update" parameterType="AuditArchive">UPDATE audit_archive SET archive_status=#{archiveStatus},review_by=#{reviewBy},review_time=now(),
+        archive_time=CASE WHEN #{archiveStatus}=2 THEN now() ELSE archive_time END WHERE id=#{id}</update>
+    <delete id="deleteById">DELETE FROM audit_archive WHERE id=#{id}</delete>
+</mapper>

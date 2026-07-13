@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.AuditMaterialChecklistMapper">
+    <resultMap id="Result" type="AuditMaterialChecklist">
+        <id property="id" column="id"/><result property="projectId" column="project_id"/>
+        <result property="materialName" column="material_name"/><result property="materialType" column="material_type"/>
+        <result property="required" column="required"/><result property="submitStatus" column="submit_status"/>
+        <result property="filePath" column="file_path"/><result property="submitBy" column="submit_by"/>
+        <result property="submitTime" column="submit_time"/><result property="source" column="source"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+    <select id="selectByProjectId" resultMap="Result">SELECT * FROM audit_material_checklist WHERE project_id=#{projectId} ORDER BY create_time</select>
+    <insert id="insert" parameterType="AuditMaterialChecklist" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO audit_material_checklist(project_id,material_name,material_type,required,submit_status,file_path,submit_by,source,create_time)
+        VALUES(#{projectId},#{materialName},#{materialType},#{required},0,#{filePath},#{submitBy},#{source},now())</insert>
+    <update id="update" parameterType="AuditMaterialChecklist">UPDATE audit_material_checklist SET submit_status=#{submitStatus},file_path=#{filePath},submit_by=#{submitBy},submit_time=now() WHERE id=#{id}</update>
+    <delete id="deleteById">DELETE FROM audit_material_checklist WHERE id=#{id}</delete>
+</mapper>

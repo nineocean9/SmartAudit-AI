@@ -1,11 +1,18 @@
 package com.ruoyi.system.domain;
 
+import com.ruoyi.common.core.domain.BaseEntity;
+import java.math.BigDecimal;
+
 /**
- * 审计问题（模块二 - 审计问题管理）
- * 对应表 audit_issue
+ * 审计问题实体
+ * 对应数据库表 audit_issue
+ *
+ * @author ruoyi
  */
-public class AuditIssue
+public class AuditIssue extends BaseEntity
 {
+    private static final long serialVersionUID = 1L;
+
     private Long id;
     private Long projectId;
     private String issueDesc;
@@ -13,7 +20,18 @@ public class AuditIssue
     private Long basisId;
     private String source;
     private String deadline;
-    private String createTime;
+
+    /** 涉及金额 */
+    private BigDecimal amount;
+
+    /** 责任单位 */
+    private String responsibleUnit;
+
+    /** 责任人 */
+    private String responsiblePerson;
+
+    /** 问题类型 */
+    private String issueType;
 
     /** 关联字段（非表字段） */
     private String projectName;
@@ -22,21 +40,27 @@ public class AuditIssue
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public Long getProjectId() { return projectId; }
-    public void setProjectId(Long projectId) { this.projectId = projectId; }
+    public void setProjectId(Long v) { this.projectId = v; }
     public String getIssueDesc() { return issueDesc; }
-    public void setIssueDesc(String issueDesc) { this.issueDesc = issueDesc; }
+    public void setIssueDesc(String v) { this.issueDesc = v; }
     public Integer getSeverity() { return severity; }
-    public void setSeverity(Integer severity) { this.severity = severity; }
+    public void setSeverity(Integer v) { this.severity = v; }
     public Long getBasisId() { return basisId; }
-    public void setBasisId(Long basisId) { this.basisId = basisId; }
+    public void setBasisId(Long v) { this.basisId = v; }
     public String getSource() { return source; }
-    public void setSource(String source) { this.source = source; }
+    public void setSource(String v) { this.source = v; }
     public String getDeadline() { return deadline; }
-    public void setDeadline(String deadline) { this.deadline = deadline; }
-    public String getCreateTime() { return createTime; }
-    public void setCreateTime(String createTime) { this.createTime = createTime; }
+    public void setDeadline(String v) { this.deadline = v; }
+    public BigDecimal getAmount() { return amount; }
+    public void setAmount(BigDecimal v) { this.amount = v; }
+    public String getResponsibleUnit() { return responsibleUnit; }
+    public void setResponsibleUnit(String v) { this.responsibleUnit = v; }
+    public String getResponsiblePerson() { return responsiblePerson; }
+    public void setResponsiblePerson(String v) { this.responsiblePerson = v; }
+    public String getIssueType() { return issueType; }
+    public void setIssueType(String v) { this.issueType = v; }
     public String getProjectName() { return projectName; }
-    public void setProjectName(String projectName) { this.projectName = projectName; }
+    public void setProjectName(String v) { this.projectName = v; }
     public String getBasisTitle() { return basisTitle; }
-    public void setBasisTitle(String basisTitle) { this.basisTitle = basisTitle; }
+    public void setBasisTitle(String v) { this.basisTitle = v; }
 }

@@ -8,7 +8,8 @@ package com.ruoyi.system.domain;
  */
 public class ChatTask
 {
-    /** LIST_PROJECTS / READ_PROJECT / ANALYZE_PROJECT / RISK_SCAN / DOC_CHECK / FORENSIC / QA */
+    /** LIST_PROJECTS / READ_PROJECT / ANALYZE_PROJECT / RISK_SCAN / DOC_CHECK / FORENSIC
+     *  / MATCH_BASIS / QUERY_RECTIFICATION / RECOMMEND_OBJECT / QA */
     private String taskType;
 
     /** A公司 / 图书馆工程审计委托项目 / 科研经费专项审计 */
@@ -19,6 +20,9 @@ public class ChatTask
 
     /** 是否需要图表 */
     private Boolean needChart;
+
+    /** 查询整改情况时的单位名称 */
+    private String unitName;
 
     public String getTaskType() { return taskType; }
     public void setTaskType(String taskType) { this.taskType = taskType; }
@@ -31,4 +35,7 @@ public class ChatTask
 
     public Boolean getNeedChart() { return needChart; }
     public void setNeedChart(Boolean needChart) { this.needChart = needChart; }
+
+    public String getUnitName() { return unitName; }
+    public void setUnitName(String unitName) { this.unitName = unitName; }
 }

@@ -257,6 +257,71 @@ export const dynamicRoutes = [
         meta: { title: 'AI日志' }
       }
     ]
+  },
+  {
+    path: '/audit/leader',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/audit/leader'),
+        name: 'AuditLeader',
+        meta: { title: '领导干部库' }
+      }
+    ]
+  },
+  {
+    path: '/audit/scheme-template',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/audit/schemeTemplate'),
+        name: 'SchemeTemplate',
+        meta: { title: '方案模板库' }
+      }
+    ]
+  },
+  {
+    path: '/audit/prepare',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/audit/prepare'),
+        name: 'AuditPrepare',
+        meta: { title: '审计准备' }
+      }
+    ]
+  },
+  {
+    path: '/audit/archive',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/audit/archive'),
+        name: 'AuditArchive',
+        meta: { title: '项目归档' }
+      }
+    ]
+  },
+  {
+    path: '/audit/temp-auth',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/audit/tempAuth'),
+        name: 'TempAuth',
+        meta: { title: '临时授权管理' }
+      }
+    ]
   }
 ]
 

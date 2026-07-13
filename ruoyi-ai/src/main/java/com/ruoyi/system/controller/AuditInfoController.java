@@ -14,6 +14,8 @@ import java.util.Map;
 public class AuditInfoController extends BaseController
 {
     @Autowired private IAuditInfoService service;
+    @Autowired private com.ruoyi.system.mapper.AuditPlanAttachMapper attachMapper;
+    @Autowired private com.ruoyi.system.mapper.AuditPlanChangeLogMapper changeLogMapper;
 
     // 计划
     @PreAuthorize("@ss.hasPermi('audit:plan:view')")
@@ -85,4 +87,45 @@ public class AuditInfoController extends BaseController
                 new com.ruoyi.common.utils.poi.ExcelUtil<>(com.ruoyi.system.domain.AuditPlan.class);
         try { util.exportExcel(response, list, "审计计划数据"); } catch (Exception e) { throw new RuntimeException(e); }
     }
+
+    // === 计划附件 ===
+    @PreAuthorize("@ss.hasPermi('audit:plan:view')")
+    @GetMapping("/plan/{planId}/attachments")
+    public AjaxResult planAttachments(@PathVariable Long planId) { return success(attachMapper.selectByPlanId(planId)); }
+
+    @PreAuthorize("@ss.hasPermi('audit:plan:edit')")
+    @PostMapping("/plan/attachment")
+    public AjaxResult addAttachment(@RequestBody com.ruoyi.system.domain.AuditPlanAttachment att) { return toAjax(attachMapper.insert(att)); }
+
+    @PreAuthorize("@ss.hasPermi('audit:plan:edit')")
+    @DeleteMapping("/plan/attachment/{id}")
+    public AjaxResult delAttachment(@PathVariable Long id) { return toAjax(attachMapper.deleteById(id)); }
+
+    // === 计划更新（带变更日志） ===
+    @PreAuthorize("@ss.hasPermi('audit:plan:edit')")
+    @PutMapping("/plan")
+    public AjaxResult updatePlan(@RequestBody Map<String,Object> p) { return toAjax(service.updatePlan(p)); }
+
+    // === 计划变更日志 ===
+    @PreAuthorize("@ss.hasPermi('audit:plan:view')")
+    @GetMapping("/plan/{planId}/changeLogs")
+    public AjaxResult planChangeLogs(@PathVariable Long planId) { return success(changeLogMapper.selectByPlanId(planId)); }
+
+    // === 单位更新 ===
+    @PreAuthorize("@ss.hasPermi('audit:unit:edit')")
+    @PutMapping("/unit")
+    public AjaxResult updateUnit(@RequestBody Map<String,Object> u) { return toAjax(service.updateUnit(u)); }
+
+    // === 领导CRUD ===
+    @PreAuthorize("@ss.hasPermi('audit:leader:edit')")
+    @PostMapping("/leader")
+    public AjaxResult addLeader(@RequestBody Map<String,Object> l) { return toAjax(service.insertLeader(l)); }
+
+    @PreAuthorize("@ss.hasPermi('audit:leader:edit')")
+    @PutMapping("/leader")
+    public AjaxResult updateLeader(@RequestBody Map<String,Object> l) { return toAjax(service.updateLeader(l)); }
+
+    @PreAuthorize("@ss.hasPermi('audit:leader:edit')")
+    @DeleteMapping("/leader/{ids}")
+    public AjaxResult delLeader(@PathVariable Long[] ids) { return toAjax(service.deleteLeaderByIds(ids)); }
 }

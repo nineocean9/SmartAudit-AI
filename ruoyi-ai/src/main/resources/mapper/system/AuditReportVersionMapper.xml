@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.AuditReportVersionMapper">
+    <resultMap id="Result" type="AuditReportVersion">
+        <id property="id" column="id"/><result property="reportId" column="report_id"/>
+        <result property="versionNo" column="version_no"/><result property="content" column="content"/>
+        <result property="changeDesc" column="change_desc"/><result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+    <select id="selectByReportId" resultMap="Result">SELECT * FROM audit_report_version WHERE report_id=#{reportId} ORDER BY version_no DESC</select>
+    <select id="selectById" resultMap="Result">SELECT * FROM audit_report_version WHERE id=#{id}</select>
+    <insert id="insert" parameterType="AuditReportVersion" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO audit_report_version(report_id,version_no,content,change_desc,create_by,create_time)
+        VALUES(#{reportId},#{versionNo},#{content},#{changeDesc},#{createBy},now())</insert>
+</mapper>

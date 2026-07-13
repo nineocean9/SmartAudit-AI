@@ -55,6 +55,9 @@ public class ChatTaskParserServiceImpl implements IChatTaskParserService
                 + "- RISK_SCAN：扫描风险/风险点/风险线索\n"
                 + "- DOC_CHECK：核查文档/文档合规检查\n"
                 + "- FORENSIC：生成取证单/出具取证\n"
+                + "- MATCH_BASIS：匹配定性依据/查找法条法规/推荐适用依据\n"
+                + "- QUERY_RECTIFICATION：查询整改情况/整改完成率/整改统计（unitName填单位名）\n"
+                + "- RECOMMEND_OBJECT：推荐应审对象/哪些单位需要审计/审计计划推荐\n"
                 + "- QA：不涉及具体项目的通用问题\n\n"
                 + "规则：\n"
                 + "1. 如果只有1个意图 → 返回只含1个元素的数组\n"
@@ -169,6 +172,34 @@ public class ChatTaskParserServiceImpl implements IChatTaskParserService
             tasks.add(t);
         }
 
+        if (userInput.contains("匹配依据") || userInput.contains("定性依据") || userInput.contains("查找法条")
+                || userInput.contains("定性法条") || userInput.contains("适用依据") || userInput.contains("法规依据"))
+        {
+            ChatTask t = new ChatTask();
+            t.setTaskType("MATCH_BASIS");
+            t.setProjectName(projectName);
+            t.setKeyword(userInput);
+            tasks.add(t);
+        }
+
+        if (userInput.contains("整改情况") || userInput.contains("整改完成率") || userInput.contains("整改统计")
+                || userInput.contains("整改进度") || userInput.contains("整改跟踪"))
+        {
+            ChatTask t = new ChatTask();
+            t.setTaskType("QUERY_RECTIFICATION");
+            String unitName = extractSimpleUnitName(userInput);
+            t.setUnitName(unitName);
+            tasks.add(t);
+        }
+
+        if (userInput.contains("推荐应审") || userInput.contains("应审对象") || userInput.contains("需要审计")
+                || userInput.contains("审计对象推荐") || userInput.contains("推荐审计对象"))
+        {
+            ChatTask t = new ChatTask();
+            t.setTaskType("RECOMMEND_OBJECT");
+            tasks.add(t);
+        }
+
         if (tasks.isEmpty())
         {
             tasks.add(fallbackSingle(userInput));
@@ -201,6 +232,14 @@ public class ChatTaskParserServiceImpl implements IChatTaskParserService
     {
         java.util.regex.Matcher m = java.util.regex.Pattern
                 .compile("([\\u4e00-\\u9fa5A-Za-z0-9]{2,}(?:公司|学院|项目|单位))")
+                .matcher(text);
+        return m.find() ? m.group(1) : null;
+    }
+
+    private String extractSimpleUnitName(String text)
+    {
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("([\\u4e00-\\u9fa5A-Za-z0-9]{2,}(?:学院|公司|单位|部门|中心|处|院|局|所|办))")
                 .matcher(text);
         return m.find() ? m.group(1) : null;
     }

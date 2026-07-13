@@ -42,6 +42,7 @@ public class AiChatServiceImpl implements IAiChatService
     @Autowired private IAiForensicService aiForensicService;
     @Autowired private IChatTaskParserService chatTaskParserService;
     @Autowired private IProjectDocService projectDocService;
+    @Autowired private com.ruoyi.system.service.IAuditInfoService auditInfoService;
     @Autowired private AiChatMapper aiChatMapper;
 
     // ================================================================
@@ -157,6 +158,15 @@ public class AiChatServiceImpl implements IAiChatService
                     case "FORENSIC":
                         executeForensic(conversationId, task, userInput, emitter);
                         break;
+                    case "MATCH_BASIS":
+                        executeMatchBasis(conversationId, task, userInput, emitter);
+                        break;
+                    case "QUERY_RECTIFICATION":
+                        executeQueryRectification(conversationId, task, userInput, emitter);
+                        break;
+                    case "RECOMMEND_OBJECT":
+                        executeRecommendObject(conversationId, task, userInput, emitter);
+                        break;
                     default:
                         executeNormalChat(conversationId, userInput, emitter);
                         break;
@@ -228,7 +238,7 @@ public class AiChatServiceImpl implements IAiChatService
         }
 
         String truncated = dataText.length() > 8000 ? dataText.substring(0, 8000) + "\n..." : dataText;
-        String systemPrompt = "你是专业审计助手。以下是"" + projectName + ""的文档资料。\n"
+        String systemPrompt = "你是专业审计助手。以下是" + projectName + "的文档资料。\n"
                 + "请仅根据资料回答用户关于该项目内容和数据的问题。\n"
                 + "注意：不要生成图表、驾驶舱、取证单等内容，只做文字回答。\n\n"
                 + "--- 项目资料 ---\n" + truncated + "\n--- 结束 ---";
@@ -304,6 +314,198 @@ public class AiChatServiceImpl implements IAiChatService
         reply.append("\n\n---\n*取证单已保存，编号：").append(draft.getId()).append("*");
 
         persistAndSend(conversationId, reply.toString(), emitter);
+    }
+
+    /**
+     * MATCH_BASIS：AI 自动匹配定性依据
+     * 利用 RAG 管线召回相关法条，由 AI 分析推荐
+     */
+    private void executeMatchBasis(Long conversationId, ChatTask task, String userInput, SseEmitter emitter)
+    {
+        // 利用 RAG 管线做依据召回
+        IAuditRagService.RagContext ragCtx = auditRagService.executeRag(userInput);
+        List<com.ruoyi.system.domain.AuditBasis> recalled = ragCtx.getRecalledBasis();
+
+        if (recalled == null || recalled.isEmpty())
+        {
+            persistAndSend(conversationId, "⚠ 未检索到匹配的定性依据，请尝试更具体地描述审计问题。", emitter);
+            return;
+        }
+
+        // 将召回的依据拼成上下文
+        StringBuilder basisText = new StringBuilder();
+        for (int i = 0; i < recalled.size(); i++)
+        {
+            com.ruoyi.system.domain.AuditBasis b = recalled.get(i);
+            basisText.append(i + 1).append(". 【").append(b.getBasisNo() != null ? b.getBasisNo() : "").append("】")
+                    .append(b.getTitle() != null ? b.getTitle() : "").append("\n")
+                    .append(b.getContent() != null ? b.getContent() : "").append("\n\n");
+        }
+
+        String systemPrompt = "你是专业审计法规顾问。用户描述了一个审计问题，系统已通过向量检索召回以下可能相关的法条法规。\n"
+                + "请完成：\n"
+                + "1. 逐条分析每个法条与用户问题的相关性（高/中/低）\n"
+                + "2. 推荐最适用的定性依据，说明理由\n"
+                + "3. 指出是否存在引用缺口（用户可能还需要的法条）\n"
+                + "4. 给出定性建议\n\n"
+                + "--- 召回的法条法规（共" + recalled.size() + "条） ---\n"
+                + basisText + "--- 结束 ---";
+
+        executeStreamingWithPrompt(conversationId, systemPrompt, userInput, emitter);
+    }
+
+    /**
+     * QUERY_RECTIFICATION：查询整改情况
+     * 查询 audit_issue + audit_rectification 统计整改进度
+     */
+    private void executeQueryRectification(Long conversationId, ChatTask task, String userInput, SseEmitter emitter)
+    {
+        String unitName = task.getUnitName();
+
+        // 直接用 JDBC 查询整改统计
+        try (java.sql.Connection conn = javax.sql.DataSource.class.cast(
+                org.springframework.beans.factory.BeanFactoryUtils
+                        .beanOfType(org.springframework.context.ApplicationContext.class.cast(
+                                org.springframework.beans.factory.annotation.Autowired.class), javax.sql.DataSource.class))
+                .getConnection())
+        {
+            // fallback: use simpler approach via streaming AI with data context
+        }
+        catch (Exception ignored) { }
+
+        // 构建查询 SQL，通过 AI 分析
+        StringBuilder dataContext = new StringBuilder();
+        String filterClause = (unitName != null && !unitName.isBlank())
+                ? " AND p.audited_unit LIKE '%" + unitName + "%'" : "";
+
+        String sql = "SELECT p.project_name, p.audited_unit, "
+                + "COUNT(i.id) AS total_issues, "
+                + "SUM(CASE WHEN r.status = 1 THEN 1 ELSE 0 END) AS completed, "
+                + "SUM(CASE WHEN r.status = 0 OR r.status IS NULL THEN 1 ELSE 0 END) AS pending, "
+                + "SUM(CASE WHEN i.deadline < NOW() AND (r.status = 0 OR r.status IS NULL) THEN 1 ELSE 0 END) AS overdue "
+                + "FROM audit_issue i "
+                + "JOIN audit_project p ON p.id = i.project_id "
+                + "LEFT JOIN audit_rectification r ON r.issue_id = i.id "
+                + "WHERE 1=1" + filterClause + " "
+                + "GROUP BY p.project_name, p.audited_unit "
+                + "ORDER BY overdue DESC, total_issues DESC";
+
+        try
+        {
+            // 获取 DataSource bean
+            javax.sql.DataSource dataSource = org.springframework.web.context.ContextLoader
+                    .getCurrentWebApplicationContext() != null
+                    ? org.springframework.web.context.ContextLoader.getCurrentWebApplicationContext()
+                    .getBean(javax.sql.DataSource.class)
+                    : null;
+
+            if (dataSource == null)
+            {
+                // 如果无法获取 DataSource，使用 AI 生成通用回答
+                String prompt = "你是审计整改跟踪专家。用户查询了"
+                        + (unitName != null ? "\"" + unitName + "\"的" : "全部")
+                        + "整改情况，但目前无法直接访问数据库。\n请告诉用户可以通过整改管理页面查看详情。";
+                executeStreamingWithPrompt(conversationId, prompt, userInput, emitter);
+                return;
+            }
+
+            try (java.sql.Connection conn = dataSource.getConnection();
+                 java.sql.PreparedStatement ps = conn.prepareStatement(sql);
+                 java.sql.ResultSet rs = ps.executeQuery())
+            {
+                int totalIssues = 0, totalCompleted = 0, totalPending = 0, totalOverdue = 0;
+                dataContext.append("| 项目名称 | 被审计单位 | 问题总数 | 已整改 | 未整改 | 逾期 |\n");
+                dataContext.append("|---------|----------|--------|------|------|-----|\n");
+
+                while (rs.next())
+                {
+                    int issues = rs.getInt("total_issues");
+                    int completed = rs.getInt("completed");
+                    int pending = rs.getInt("pending");
+                    int overdue = rs.getInt("overdue");
+                    totalIssues += issues;
+                    totalCompleted += completed;
+                    totalPending += pending;
+                    totalOverdue += overdue;
+                    dataContext.append("| ").append(rs.getString("project_name"))
+                            .append(" | ").append(rs.getString("audited_unit"))
+                            .append(" | ").append(issues)
+                            .append(" | ").append(completed)
+                            .append(" | ").append(pending)
+                            .append(" | ").append(overdue).append(" |\n");
+                }
+
+                if (totalIssues == 0)
+                {
+                    persistAndSend(conversationId, "⚠ 未查询到"
+                            + (unitName != null ? "\"" + unitName + "\"的" : "") + "整改数据。", emitter);
+                    return;
+                }
+
+                dataContext.append("\n**汇总：** 问题总数 ").append(totalIssues)
+                        .append("，已整改 ").append(totalCompleted)
+                        .append("，未整改 ").append(totalPending)
+                        .append("，逾期 ").append(totalOverdue)
+                        .append("，整改完成率 ")
+                        .append(String.format("%.1f%%", totalCompleted * 100.0 / totalIssues));
+            }
+        }
+        catch (Exception e)
+        {
+            log.warn("整改数据查询失败: {}", e.getMessage());
+            persistAndSend(conversationId, "⚠ 整改数据查询失败：" + e.getMessage(), emitter);
+            return;
+        }
+
+        String systemPrompt = "你是专业审计整改跟踪专家。以下是"
+                + (unitName != null ? "\"" + unitName + "\"相关的" : "全部")
+                + "整改统计数据。\n请完成：\n"
+                + "1. 总体整改情况概述\n"
+                + "2. 逾期未整改的重点关注项\n"
+                + "3. 整改建议和跟进措施\n\n"
+                + "--- 整改数据 ---\n" + dataContext + "\n--- 结束 ---";
+
+        executeStreamingWithPrompt(conversationId, systemPrompt, userInput, emitter);
+    }
+
+    /**
+     * RECOMMEND_OBJECT：AI 智能推荐审计对象
+     * 调用已有的推荐 API，由 AI 综合分析
+     */
+    private void executeRecommendObject(Long conversationId, ChatTask task, String userInput, SseEmitter emitter)
+    {
+        Map<String, Object> recommendData;
+        try
+        {
+            recommendData = auditInfoService.recommendAuditTargets();
+        }
+        catch (Exception e)
+        {
+            log.warn("推荐应审对象查询失败: {}", e.getMessage());
+            persistAndSend(conversationId, "⚠ 推荐数据获取失败：" + e.getMessage(), emitter);
+            return;
+        }
+
+        if (recommendData == null || recommendData.isEmpty())
+        {
+            persistAndSend(conversationId, "⚠ 暂无推荐数据，请先维护单位和领导信息。", emitter);
+            return;
+        }
+
+        // 将推荐数据转为文本
+        String dataJson = com.alibaba.fastjson2.JSON.toJSONString(recommendData);
+        String truncated = dataJson.length() > 6000 ? dataJson.substring(0, 6000) + "\n..." : dataJson;
+
+        String systemPrompt = "你是审计计划编制专家。系统已根据多维度评分（未审时长、资金规模、风险等级、历史问题数等）推荐了应审对象。\n"
+                + "以下是推荐数据（含推荐单位和推荐领导干部）。\n\n"
+                + "请完成：\n"
+                + "1. 列出推荐的应审单位，按优先级排序并说明推荐理由\n"
+                + "2. 列出推荐的经济责任审计领导干部对象\n"
+                + "3. 给出年度审计计划编排建议\n"
+                + "4. 标注高优先级审计对象\n\n"
+                + "--- 推荐数据 ---\n" + truncated + "\n--- 结束 ---";
+
+        executeStreamingWithPrompt(conversationId, systemPrompt, userInput, emitter);
     }
 
     /**
