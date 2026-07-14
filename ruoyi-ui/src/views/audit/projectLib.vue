@@ -168,6 +168,11 @@ function viewDoc(doc) {
     router.push(`/audit/excel-view?id=${doc.id}`)
     return
   }
+  // Word / PDF 文件 → 跳转到文档预览页
+  if (ext === 'docx' || ext === 'pdf') {
+    router.push(`/audit/doc-preview?id=${doc.id}`)
+    return
+  }
   // 其他文件 → 弹窗显示纯文本
   const content = doc.contentText || ''
   console.log('viewDoc content length:', content.length)

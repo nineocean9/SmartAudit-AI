@@ -21,8 +21,9 @@
           <el-tag :type="['warning','','success'][scope.row.archiveStatus]">{{ ['整理中','待审核','已归档'][scope.row.archiveStatus] }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="200">
+      <el-table-column label="操作" width="250">
         <template #default="scope">
+          <el-button link type="primary" @click="previewFile(scope.row)">查看</el-button>
           <el-button link type="primary" v-if="scope.row.archiveStatus===0" @click="submitReview(scope.row)">提交审核</el-button>
           <el-button link type="success" v-if="scope.row.archiveStatus===1" @click="approveArchive(scope.row)">审核通过</el-button>
           <el-button link type="danger" @click="handleDelete(scope.row)">删除</el-button>
@@ -57,8 +58,11 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '@/utils/request'
+
+const router = useRouter()
 
 const loading = ref(false)
 const archiveList = ref([])
@@ -95,6 +99,16 @@ function handleDelete(row) {
   ElMessageBox.confirm('确认删除？').then(() => {
     request({ url: '/audit/report/archive/' + row.id, method: 'delete' }).then(() => { ElMessage.success('删除成功'); getList() })
   })
+}
+function previewFile(row) {
+  const ext = (row.fileName || '').split('.').pop()?.toLowerCase()
+  if (ext === 'docx' || ext === 'pdf') {
+    router.push('/audit/doc-preview?url=' + encodeURIComponent(row.filePath || '') + '&name=' + encodeURIComponent(row.fileName || ''))
+  } else if (ext === 'xlsx' || ext === 'xls') {
+    ElMessage.info('Excel 文件请在项目资料库中查看')
+  } else {
+    ElMessage.info('该文件格式暂不支持在线预览')
+  }
 }
 onMounted(() => { getList(); getProjects() })
 </script>

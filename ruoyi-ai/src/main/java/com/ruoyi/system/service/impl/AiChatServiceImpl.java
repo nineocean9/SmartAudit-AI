@@ -43,6 +43,7 @@ public class AiChatServiceImpl implements IAiChatService
     @Autowired private IChatTaskParserService chatTaskParserService;
     @Autowired private IProjectDocService projectDocService;
     @Autowired private com.ruoyi.system.service.IAuditInfoService auditInfoService;
+    @Autowired private javax.sql.DataSource dataSource;
     @Autowired private AiChatMapper aiChatMapper;
 
     // ================================================================
@@ -337,7 +338,7 @@ public class AiChatServiceImpl implements IAiChatService
         for (int i = 0; i < recalled.size(); i++)
         {
             com.ruoyi.system.domain.AuditBasis b = recalled.get(i);
-            basisText.append(i + 1).append(". 【").append(b.getBasisNo() != null ? b.getBasisNo() : "").append("】")
+            basisText.append(i + 1).append(". 【").append(b.getCategory() != null ? b.getCategory() : "").append("】")
                     .append(b.getTitle() != null ? b.getTitle() : "").append("\n")
                     .append(b.getContent() != null ? b.getContent() : "").append("\n\n");
         }
@@ -362,21 +363,8 @@ public class AiChatServiceImpl implements IAiChatService
     {
         String unitName = task.getUnitName();
 
-        // 直接用 JDBC 查询整改统计
-        try (java.sql.Connection conn = javax.sql.DataSource.class.cast(
-                org.springframework.beans.factory.BeanFactoryUtils
-                        .beanOfType(org.springframework.context.ApplicationContext.class.cast(
-                                org.springframework.beans.factory.annotation.Autowired.class), javax.sql.DataSource.class))
-                .getConnection())
-        {
-            // fallback: use simpler approach via streaming AI with data context
-        }
-        catch (Exception ignored) { }
-
-        // 构建查询 SQL，通过 AI 分析
-        StringBuilder dataContext = new StringBuilder();
         String filterClause = (unitName != null && !unitName.isBlank())
-                ? " AND p.audited_unit LIKE '%" + unitName + "%'" : "";
+                ? " AND p.audited_unit LIKE ? " : "";
 
         String sql = "SELECT p.project_name, p.audited_unit, "
                 + "COUNT(i.id) AS total_issues, "
@@ -386,32 +374,21 @@ public class AiChatServiceImpl implements IAiChatService
                 + "FROM audit_issue i "
                 + "JOIN audit_project p ON p.id = i.project_id "
                 + "LEFT JOIN audit_rectification r ON r.issue_id = i.id "
-                + "WHERE 1=1" + filterClause + " "
+                + "WHERE 1=1" + filterClause
                 + "GROUP BY p.project_name, p.audited_unit "
                 + "ORDER BY overdue DESC, total_issues DESC";
 
-        try
-        {
-            // 获取 DataSource bean
-            javax.sql.DataSource dataSource = org.springframework.web.context.ContextLoader
-                    .getCurrentWebApplicationContext() != null
-                    ? org.springframework.web.context.ContextLoader.getCurrentWebApplicationContext()
-                    .getBean(javax.sql.DataSource.class)
-                    : null;
+        StringBuilder dataContext = new StringBuilder();
 
-            if (dataSource == null)
+        try (java.sql.Connection conn = dataSource.getConnection();
+             java.sql.PreparedStatement ps = conn.prepareStatement(sql))
+        {
+            if (unitName != null && !unitName.isBlank())
             {
-                // 如果无法获取 DataSource，使用 AI 生成通用回答
-                String prompt = "你是审计整改跟踪专家。用户查询了"
-                        + (unitName != null ? "\"" + unitName + "\"的" : "全部")
-                        + "整改情况，但目前无法直接访问数据库。\n请告诉用户可以通过整改管理页面查看详情。";
-                executeStreamingWithPrompt(conversationId, prompt, userInput, emitter);
-                return;
+                ps.setString(1, "%" + unitName + "%");
             }
 
-            try (java.sql.Connection conn = dataSource.getConnection();
-                 java.sql.PreparedStatement ps = conn.prepareStatement(sql);
-                 java.sql.ResultSet rs = ps.executeQuery())
+            try (java.sql.ResultSet rs = ps.executeQuery())
             {
                 int totalIssues = 0, totalCompleted = 0, totalPending = 0, totalOverdue = 0;
                 dataContext.append("| 项目名称 | 被审计单位 | 问题总数 | 已整改 | 未整改 | 逾期 |\n");

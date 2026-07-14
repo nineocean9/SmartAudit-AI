@@ -460,6 +460,17 @@ function removeAttachment(file) {
 
 function previewAttachment(file) {
   if (file.url) {
+    const ext = (file.name || file.url).split('.').pop()?.toLowerCase()
+    if (ext === 'docx' || ext === 'pdf') {
+      router.push('/audit/doc-preview?url=' + encodeURIComponent(file.url) + '&name=' + encodeURIComponent(file.name || ''))
+      dialogVisible.value = false
+      return
+    }
+    if (ext === 'xlsx' || ext === 'xls') {
+      // Excel 附件暂用新标签页打开
+      window.open(import.meta.env.VITE_APP_BASE_API + file.url, '_blank')
+      return
+    }
     window.open(import.meta.env.VITE_APP_BASE_API + file.url, '_blank')
   }
 }

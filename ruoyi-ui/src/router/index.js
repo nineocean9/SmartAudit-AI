@@ -133,6 +133,19 @@ export const constantRoutes = [
         meta: { title: 'Excel 查看', icon: 'table' }
       }
     ]
+  },
+  {
+    path: '/audit/doc-preview',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/audit/docPreview'),
+        name: 'DocPreview',
+        meta: { title: '文档预览', icon: 'document' }
+      }
+    ]
   }
 ]
 export const dynamicRoutes = [
