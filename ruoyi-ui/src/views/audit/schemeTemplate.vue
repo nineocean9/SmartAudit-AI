@@ -54,9 +54,9 @@
       </template>
     </el-dialog>
 
-    <el-dialog title="模板预览" v-model="previewVisible" width="700px">
-      <div style="white-space:pre-wrap;line-height:1.8">{{ previewContent }}</div>
-    </el-dialog>
+    <el-drawer v-model="previewVisible" title="模板预览" size="600px">
+      <div class="template-preview" v-html="formatPreview(previewContent)" />
+    </el-drawer>
   </div>
 </template>
 
@@ -83,6 +83,14 @@ function getList() {
 function handleAdd() { form.value = { status: 1 }; dialogTitle.value = '新增模板'; dialogVisible.value = true }
 function handleEdit(row) { form.value = { ...row }; dialogTitle.value = '编辑模板'; dialogVisible.value = true }
 function handlePreview(row) { previewContent.value = row.content; previewVisible.value = true }
+function formatPreview(text) {
+  if (!text) return ''
+  return text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\n/g, '<br>')
+    .replace(/^(一|二|三|四|五|六|七|八|九|十|[一二三四五六七八九十]+、.+)$/gm, '<h4 style="color:#303133;margin:16px 0 8px">$1</h4>')
+    .replace(/^\d+[.、．]\s*(.+)$/gm, '<p style="margin:4px 0 4px 16px">• $1</p>')
+}
 function submitForm() {
   const method = form.value.id ? 'put' : 'post'
   request({ url: '/audit/prepare/template', method, data: form.value }).then(() => {
@@ -96,3 +104,12 @@ function handleDelete(row) {
 }
 onMounted(() => getList())
 </script>
+
+<style scoped>
+.template-preview {
+  padding: 20px;
+  font-size: 14px;
+  line-height: 2;
+  color: #303133;
+}
+</style>
