@@ -1,4 +1,4 @@
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /build
 RUN corepack enable && corepack prepare pnpm@11.9.0 --activate
 COPY ruoyi-ui/package.json ruoyi-ui/pnpm-lock.yaml ruoyi-ui/pnpm-workspace.yaml ./
