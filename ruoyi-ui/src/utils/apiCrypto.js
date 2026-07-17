@@ -30,11 +30,7 @@ function sign(iv, cipherText, sessionKey) {
 }
 
 export function shouldEncrypt(config) {
-  if (config.headers?.skipEncryption === true || config.headers?.skipEncryption === 'true') return false
-  if (config.responseType === 'blob' || config.responseType === 'arraybuffer') return false
-  if (typeof FormData !== 'undefined' && config.data instanceof FormData) return false
-  const contentType = String(config.headers?.['Content-Type'] || config.headers?.get?.('Content-Type') || '')
-  return !contentType.includes('multipart/form-data') && !contentType.includes('application/x-www-form-urlencoded')
+  return false // 加密功能已禁用
 }
 
 export async function encryptConfig(config) {

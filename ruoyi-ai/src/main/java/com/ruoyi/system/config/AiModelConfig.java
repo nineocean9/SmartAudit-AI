@@ -4,6 +4,7 @@ import java.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import dev.langchain4j.model.chat.ChatLanguageModel;
@@ -43,6 +44,7 @@ public class AiModelConfig
     private AiModelProperties props;
 
     @Bean
+    @ConditionalOnProperty(name = "ai.model.api-key", matchIfMissing = false)
     public ChatLanguageModel chatLanguageModel()
     {
         String provider = props.getProvider();
@@ -90,6 +92,7 @@ public class AiModelConfig
     }
 
     @Bean
+    @ConditionalOnProperty(name = "ai.model.api-key", matchIfMissing = false)
     public StreamingChatLanguageModel streamingChatLanguageModel()
     {
         String provider = props.getProvider();

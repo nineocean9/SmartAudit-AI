@@ -57,6 +57,7 @@ services:
       TOKEN_SECRET: ${TOKEN_SECRET}
       AI_MODEL_API_KEY: ${AI_MODEL_API_KEY:-}
       AI_EMBEDDING_API_KEY: ${AI_EMBEDDING_API_KEY:-}
+      RUOYI_DEMO_CAPTCHA_ENABLED: "true"
     volumes:
       - upload_data:/data/uploadPath
 

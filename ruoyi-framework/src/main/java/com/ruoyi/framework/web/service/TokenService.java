@@ -71,13 +71,20 @@ public class TokenService
                 // 解析对应的权限以及用户信息
                 String uuid = (String) claims.get(Constants.LOGIN_USER_KEY);
                 String userKey = getTokenKey(uuid);
+                log.info("TokenService.getLoginUser: uuid={}, userKey={}", uuid, userKey);
                 LoginUser user = redisCache.getCacheObject(userKey);
+                if (user == null) {
+                    log.warn("TokenService.getLoginUser: Redis中未找到用户数据, userKey={}", userKey);
+                }
                 return user;
             }
             catch (Exception e)
             {
-                log.error("获取用户信息异常'{}'", e.getMessage());
+                log.error("获取用户信息异常'{}'", e.getMessage(), e);
             }
+        }
+        else {
+            log.warn("TokenService.getLoginUser: 请求中未找到token, header={}", request.getHeader(header));
         }
         return null;
     }
@@ -117,6 +124,7 @@ public class TokenService
         loginUser.setToken(token);
         setUserAgent(loginUser);
         refreshToken(loginUser);
+        log.info("TokenService.createToken: 已存储到Redis, key=login_tokens:{}", token);
 
         Map<String, Object> claims = new HashMap<>();
         claims.put(Constants.LOGIN_USER_KEY, token);

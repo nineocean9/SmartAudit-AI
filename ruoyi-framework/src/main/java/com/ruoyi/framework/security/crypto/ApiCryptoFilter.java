@@ -11,12 +11,13 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.springframework.core.Ordered;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-@Component
-public class ApiCryptoFilter extends OncePerRequestFilter
+// @Component  // 加密功能已禁用
+public class ApiCryptoFilter extends OncePerRequestFilter implements Ordered
 {
     public static final String ATTR_SESSION_KEY = ApiCryptoFilter.class.getName() + ".sessionKey";
     private final ApiCryptoService cryptoService;
@@ -26,6 +27,12 @@ public class ApiCryptoFilter extends OncePerRequestFilter
     {
         this.cryptoService = cryptoService;
         this.objectMapper = objectMapper;
+    }
+
+    @Override
+    public int getOrder()
+    {
+        return Ordered.HIGHEST_PRECEDENCE + 5;
     }
 
     @Override

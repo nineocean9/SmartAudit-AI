@@ -75,7 +75,7 @@ service.interceptors.request.use(async config => {
 
 // 响应拦截器
 service.interceptors.response.use(async res => {
-    res.data = decryptResponse(res.data, res.config._cryptoSessionKey)
+  // res.data = decryptResponse(res.data, res.config._cryptoSessionKey)
     // 未设置状态码则默认成功状态
     const code = res.data.code || 200
     // 获取错误信息

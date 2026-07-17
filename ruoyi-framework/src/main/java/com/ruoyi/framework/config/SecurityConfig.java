@@ -17,7 +17,7 @@ import org.springframework.security.web.authentication.logout.LogoutFilter;
 import org.springframework.web.filter.CorsFilter;
 import com.ruoyi.framework.config.properties.PermitAllUrlProperties;
 import com.ruoyi.framework.security.filter.JwtAuthenticationTokenFilter;
-import com.ruoyi.framework.security.crypto.ApiCryptoFilter;
+// import com.ruoyi.framework.security.crypto.ApiCryptoFilter;
 import com.ruoyi.framework.security.handle.AuthenticationEntryPointImpl;
 import com.ruoyi.framework.security.handle.LogoutSuccessHandlerImpl;
 
@@ -48,9 +48,9 @@ public class SecurityConfig
     @Autowired
     private JwtAuthenticationTokenFilter authenticationTokenFilter;
 
-    @Autowired
-    private ApiCryptoFilter apiCryptoFilter;
-    
+    // @Autowired
+    // private ApiCryptoFilter apiCryptoFilter;
+
     /**
      * 跨域过滤器
      */
@@ -101,6 +101,8 @@ public class SecurityConfig
             .exceptionHandling(exception -> exception.authenticationEntryPoint(unauthorizedHandler))
             // 基于token，所以不需要session
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            // Spring Security 7 无需显式保存 SecurityContext
+            .securityContext(context -> context.requireExplicitSave(false))
             // 注解标记允许匿名访问的url
             .authorizeHttpRequests((requests) -> {
                 permitAllUrl.getUrls().forEach(url -> requests.requestMatchers(url).permitAll());
@@ -108,7 +110,7 @@ public class SecurityConfig
                 // 不应把内部收尾分派当作新的外部请求再次鉴权。
                 requests.dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll();
                 // 对于登录login 注册register 验证码captchaImage 允许匿名访问
-                requests.requestMatchers("/login", "/register", "/register/deptTree", "/captchaImage", "/crypto/public-key").permitAll()
+                requests.requestMatchers("/login", "/register", "/register/deptTree", "/captchaImage", "/getInfo", "/getRouters").permitAll()
                     // 静态资源，可匿名访问
                     .requestMatchers(HttpMethod.GET, "/", "/*.html", "/**.html", "/**.css", "/**.js", "/profile/**").permitAll()
                     .requestMatchers("/swagger-ui.html", "/v3/api-docs/**", "/swagger-ui/**", "/druid/**").permitAll()
@@ -118,11 +120,9 @@ public class SecurityConfig
             // 添加Logout filter
             .logout(logout -> logout.logoutUrl("/logout").logoutSuccessHandler(logoutSuccessHandler))
             // 添加JWT filter
-            .addFilterBefore(apiCryptoFilter, JwtAuthenticationTokenFilter.class)
             .addFilterBefore(authenticationTokenFilter, UsernamePasswordAuthenticationFilter.class)
             // 添加CORS filter
-            .addFilterBefore(corsFilter, JwtAuthenticationTokenFilter.class)
-            .addFilterBefore(corsFilter, LogoutFilter.class)
+            .addFilterBefore(corsFilter, UsernamePasswordAuthenticationFilter.class)
             .build();
     }
 
