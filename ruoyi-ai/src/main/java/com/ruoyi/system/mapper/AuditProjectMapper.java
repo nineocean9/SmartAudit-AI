@@ -10,7 +10,7 @@ import java.util.List;
  */
 public interface AuditProjectMapper
 {
-    /** 按关键词搜索项目（匹配项目名称、被审单位） */
+    /** 按关键词搜索项目（匹配项目名称、被审计单位） */
     List<AuditProject> searchProjects(@Param("keyword") String keyword);
 
     /** 查询指定项目的所有问题（含整改情况） */

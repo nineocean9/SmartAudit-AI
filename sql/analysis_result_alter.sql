@@ -1,10 +1,26 @@
 -- 扩展 analysis_result 表，支持数据可视化中心
 ALTER TABLE analysis_result ADD COLUMN IF NOT EXISTS project_name VARCHAR(255);
+ALTER TABLE analysis_result ADD COLUMN IF NOT EXISTS project_id BIGINT;
 ALTER TABLE analysis_result ADD COLUMN IF NOT EXISTS source_type VARCHAR(32) DEFAULT 'chat';
 ALTER TABLE analysis_result ADD COLUMN IF NOT EXISTS keyword VARCHAR(255);
 COMMENT ON COLUMN analysis_result.project_name IS '关联项目名称';
+COMMENT ON COLUMN analysis_result.project_id IS '关联项目ID，用于项目数据权限校验';
 COMMENT ON COLUMN analysis_result.source_type IS '来源: chat / upload / project';
 COMMENT ON COLUMN analysis_result.keyword IS '分析关键词';
+UPDATE analysis_result ar
+SET project_id = p.id
+FROM audit_project p
+WHERE ar.project_id IS NULL
+  AND ar.project_name IS NOT NULL
+  AND (trim(ar.project_name) = trim(p.project_name)
+       OR trim(ar.project_name) = trim(p.audited_unit))
+  AND p.id = (
+      SELECT max(p2.id)
+      FROM audit_project p2
+      WHERE trim(ar.project_name) = trim(p2.project_name)
+         OR trim(ar.project_name) = trim(p2.audited_unit)
+  );
+CREATE INDEX IF NOT EXISTS idx_analysis_result_project_id ON analysis_result(project_id);
 
 -- 菜单：数据可视化 (menu_id=1095)
 INSERT INTO sys_menu (menu_id, menu_name, parent_id, order_num, path, component, query, route_name, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark)

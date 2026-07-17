@@ -67,3 +67,14 @@ export function getCodeImg() {
     timeout: 20000
   })
 }
+
+export function getRegisterDeptTree() {
+  return request({
+    url: '/register/deptTree',
+    headers: {
+      isToken: false,
+      skipEncryption: true
+    },
+    method: 'get'
+  })
+}

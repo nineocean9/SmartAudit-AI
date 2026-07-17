@@ -377,7 +377,7 @@ public class AuditRagServiceImpl implements IAuditRagService
                     default -> "未知";
                 };
                 sb.append("### 项目：").append(p.getProjectName()).append("\n");
-                sb.append("- 被审单位：").append(p.getAuditedUnit()).append("\n");
+                sb.append("- 被审计单位：").append(p.getAuditedUnit()).append("\n");
                 sb.append("- 审计类型：").append(p.getAuditType()).append("\n");
                 sb.append("- 审计年度：").append(p.getAuditYear()).append("\n");
                 sb.append("- 状态：").append(statusLabel).append("\n");
@@ -440,7 +440,7 @@ public class AuditRagServiceImpl implements IAuditRagService
 
 
     /**
-     * 从查询中提取被审单位名
+     * 从查询中提取被审计单位名
      * 规则：匹配常见学院/部门名称
      */
     private String extractUnitName(String query)

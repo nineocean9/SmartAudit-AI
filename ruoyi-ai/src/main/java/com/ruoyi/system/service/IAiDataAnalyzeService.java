@@ -20,7 +20,7 @@ public interface IAiDataAnalyzeService
 
     AnalyzeResult analyze(String instruction);
 
-    Map<String, Object> analyzeChart(String dataText, String instruction,
+    Map<String, Object> analyzeChart(String dataText, String instruction, Long projectId,
                                      String projectName, String keyword,
                                      String sourceType, String createBy);
 

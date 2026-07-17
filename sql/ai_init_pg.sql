@@ -63,9 +63,14 @@ CREATE TABLE IF NOT EXISTS ai_call_quota (
 );
 COMMENT ON TABLE ai_call_quota IS 'AI调用配额';
 INSERT INTO ai_call_quota (role_code, daily_limit, allowed_functions) VALUES
-  ('auditor',  200, 'ask,match,check'),
-  ('leader',   500, 'ask,match,check,forensic,risk'),
-  ('admin',   9999, 'all')
+  ('school_leader',         500, 'ask,match,check,forensic,risk'),
+  ('audit_director',        500, 'ask,match,check,forensic,risk'),
+  ('audit_project_leader',  300, 'ask,match,check,forensic,risk'),
+  ('audit_staff',           200, 'ask,match,check'),
+  ('audited_unit_principal', 80, 'ask,match'),
+  ('audited_unit_liaison',   80, 'ask,match'),
+  ('intermediary_auditor',  150, 'ask,match,check'),
+  ('admin',                9999, 'all')
 ON CONFLICT DO NOTHING;
 
 -- 4. 文档校验任务
@@ -98,7 +103,7 @@ CREATE TABLE IF NOT EXISTS forensic_draft (
   update_time     TIMESTAMP
 );
 COMMENT ON TABLE forensic_draft IS '取证单草稿';
-COMMENT ON COLUMN forensic_draft.review_status IS '0草稿 1主审 2组长 3负责人 9已归档';
+COMMENT ON COLUMN forensic_draft.review_status IS '0草稿 1主审 2项目组长 3审计处长 9已归档';
 
 -- 6. 风险线索
 CREATE TABLE IF NOT EXISTS risk_clue (
@@ -229,6 +234,14 @@ WHERE NOT EXISTS (SELECT 1 FROM sys_menu WHERE menu_id = 1070);
 INSERT INTO sys_menu (menu_id, menu_name, parent_id, order_num, path, component, query, route_name, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark)
 SELECT 1071, '取证单复核', 1069, 2, '', '', '', '', 1, 0, 'F', '0', '0', 'ai:forensic:review', '#', 'admin', now(), '', NULL, ''
 WHERE NOT EXISTS (SELECT 1 FROM sys_menu WHERE menu_id = 1071);
+
+INSERT INTO sys_menu (menu_id, menu_name, parent_id, order_num, path, component, query, route_name, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark)
+SELECT 12124, '取证单提交复核', 1069, 3, '', '', '', '', 1, 0, 'F', '0', '0', 'ai:forensic:submit', '#', 'admin', now(), '', NULL, ''
+WHERE NOT EXISTS (SELECT 1 FROM sys_menu WHERE perms = 'ai:forensic:submit');
+
+INSERT INTO sys_menu (menu_id, menu_name, parent_id, order_num, path, component, query, route_name, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark)
+SELECT 12125, '取证单删除', 1069, 4, '', '', '', '', 1, 0, 'F', '0', '0', 'ai:forensic:delete', '#', 'admin', now(), '', NULL, ''
+WHERE NOT EXISTS (SELECT 1 FROM sys_menu WHERE perms = 'ai:forensic:delete');
 
 -- 子菜单：调用日志 (menu_id=1072)
 INSERT INTO sys_menu (menu_id, menu_name, parent_id, order_num, path, component, query, route_name, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark)

@@ -14,6 +14,21 @@ public interface ProjectDocumentMapper
     /** 插入文档 */
     int insertDocument(ProjectDocument doc);
 
+    /** 按项目、类型和逻辑文件名查找已同步的业务文档 */
+    ProjectDocument selectByBusinessKey(@Param("projectId") Long projectId,
+                                        @Param("docType") String docType,
+                                        @Param("fileName") String fileName);
+
+    ProjectDocument selectByProjectAndPath(@Param("projectId") Long projectId,
+                                           @Param("filePath") String filePath);
+
+    /** 更新从其他业务页面同步过来的文档 */
+    int updateSyncedDocument(ProjectDocument doc);
+
+    /** 隐藏业务记录删除后对应的项目库文档 */
+    int hideByProjectAndPath(@Param("projectId") Long projectId,
+                             @Param("filePath") String filePath);
+
     /** 根据ID查询 */
     ProjectDocument selectById(@Param("id") Long id);
 

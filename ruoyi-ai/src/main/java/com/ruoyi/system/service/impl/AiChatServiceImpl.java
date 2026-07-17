@@ -1,8 +1,10 @@
 package com.ruoyi.system.service.impl;
 
 import com.ruoyi.common.utils.SecurityUtils;
+import com.ruoyi.common.core.domain.model.LoginUser;
 import com.ruoyi.system.config.AiModelProperties;
 import com.ruoyi.system.domain.AiConversation;
+import com.ruoyi.system.domain.AuditBasis;
 import com.ruoyi.system.domain.ChatTask;
 import com.ruoyi.system.mapper.AiChatMapper;
 import com.ruoyi.system.service.IAiChatService;
@@ -11,6 +13,7 @@ import com.ruoyi.system.service.IAiForensicService;
 import com.ruoyi.system.service.IAuditRagService;
 import com.ruoyi.system.service.IChatTaskParserService;
 import com.ruoyi.system.service.IProjectDocService;
+import com.ruoyi.system.service.AuditProjectAccessService;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
@@ -29,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 @Service
 public class AiChatServiceImpl implements IAiChatService
@@ -45,6 +49,7 @@ public class AiChatServiceImpl implements IAiChatService
     @Autowired private com.ruoyi.system.service.IAuditInfoService auditInfoService;
     @Autowired private javax.sql.DataSource dataSource;
     @Autowired private AiChatMapper aiChatMapper;
+    @Autowired private AuditProjectAccessService projectAccessService;
 
     // ================================================================
     // 会话管理
@@ -86,6 +91,7 @@ public class AiChatServiceImpl implements IAiChatService
     @Override
     public int deleteConversation(Long id, Long userId)
     {
+        if (aiChatMapper.selectConversationById(id, userId) == null) return 0;
         aiChatMapper.deleteMessagesByConversationId(id);
         return aiChatMapper.deleteConversation(id, userId);
     }
@@ -95,8 +101,12 @@ public class AiChatServiceImpl implements IAiChatService
     // ================================================================
 
     @Override
-    public void chat(Long conversationId, String userInput, Long userId, String username, SseEmitter emitter)
+    public void chat(Long conversationId, String userInput, Long selectedProjectId,
+                     boolean resume, LoginUser loginUser, SseEmitter emitter)
     {
+        Long userId = loginUser.getUserId();
+        String username = loginUser.getUsername();
+        boolean resumedWithProject = resume && selectedProjectId != null;
         // 1. 鉴权
         AiConversation conv = aiChatMapper.selectConversationById(conversationId, userId);
         if (conv == null)
@@ -106,14 +116,17 @@ public class AiChatServiceImpl implements IAiChatService
         }
 
         // 2. 持久化用户消息
-        com.ruoyi.system.domain.AiMessage userMsg = new com.ruoyi.system.domain.AiMessage();
-        userMsg.setConversationId(conversationId);
-        userMsg.setRole("user");
-        userMsg.setContent(userInput);
-        aiChatMapper.insertMessage(userMsg);
+        if (!resumedWithProject)
+        {
+            com.ruoyi.system.domain.AiMessage userMsg = new com.ruoyi.system.domain.AiMessage();
+            userMsg.setConversationId(conversationId);
+            userMsg.setRole("user");
+            userMsg.setContent(userInput);
+            aiChatMapper.insertMessage(userMsg);
+        }
 
         // 3. 首条消息自动命名
-        if ("新对话".equals(conv.getTitle()))
+        if (!resumedWithProject && "新对话".equals(conv.getTitle()))
         {
             String autoTitle = userInput.length() > 15 ? userInput.substring(0, 15) + "…" : userInput;
             aiChatMapper.updateConversationTitle(conversationId, autoTitle, userId);
@@ -142,31 +155,31 @@ public class AiChatServiceImpl implements IAiChatService
                 switch (taskType)
                 {
                     case "LIST_PROJECTS":
-                        executeListProjects(conversationId, emitter);
+                        executeListProjects(conversationId, loginUser, emitter);
                         break;
                     case "READ_PROJECT":
-                        executeReadProject(conversationId, task, userInput, emitter);
+                        executeReadProject(conversationId, task, userInput, selectedProjectId, loginUser, emitter);
                         break;
                     case "ANALYZE_PROJECT":
-                        executeAnalyzeProject(conversationId, task, username, emitter);
+                        executeAnalyzeProject(conversationId, task, userInput, username, selectedProjectId, loginUser, emitter);
                         break;
                     case "RISK_SCAN":
-                        executeStreamingTask(conversationId, task, userInput, emitter, buildRiskScanPrompt(task));
+                        executeProjectStreamingTask(conversationId, task, userInput, selectedProjectId, loginUser, emitter, true);
                         break;
                     case "DOC_CHECK":
-                        executeStreamingTask(conversationId, task, userInput, emitter, buildDocCheckPrompt(task));
+                        executeProjectStreamingTask(conversationId, task, userInput, selectedProjectId, loginUser, emitter, false);
                         break;
                     case "FORENSIC":
-                        executeForensic(conversationId, task, userInput, emitter);
+                        executeForensic(conversationId, task, userInput, selectedProjectId, loginUser, emitter);
                         break;
                     case "MATCH_BASIS":
                         executeMatchBasis(conversationId, task, userInput, emitter);
                         break;
                     case "QUERY_RECTIFICATION":
-                        executeQueryRectification(conversationId, task, userInput, emitter);
+                        executeQueryRectification(conversationId, task, userInput, loginUser, emitter);
                         break;
                     case "RECOMMEND_OBJECT":
-                        executeRecommendObject(conversationId, task, userInput, emitter);
+                        executeRecommendObject(conversationId, task, userInput, loginUser, emitter);
                         break;
                     default:
                         executeNormalChat(conversationId, userInput, emitter);
@@ -189,9 +202,12 @@ public class AiChatServiceImpl implements IAiChatService
     // 各任务执行器（不发 done / 不 complete）
     // ================================================================
 
-    private void executeListProjects(Long conversationId, SseEmitter emitter)
+    private void executeListProjects(Long conversationId, LoginUser loginUser, SseEmitter emitter)
     {
-        List<com.ruoyi.system.domain.ProjectDocument> docs = projectDocService.listRecentDocs(10);
+        List<com.ruoyi.system.domain.ProjectDocument> docs = projectDocService.listRecentDocs(100);
+        docs = docs == null ? new ArrayList<>() : docs.stream()
+                .filter(d -> projectAccessService.canAccessProject(d.getProjectId(), loginUser))
+                .limit(10).toList();
         String summary;
         if (docs == null || docs.isEmpty())
         {
@@ -211,7 +227,8 @@ public class AiChatServiceImpl implements IAiChatService
         persistAndSend(conversationId, summary, emitter);
     }
 
-    private void executeReadProject(Long conversationId, ChatTask task, String userInput, SseEmitter emitter)
+    private void executeReadProject(Long conversationId, ChatTask task, String userInput, Long selectedProjectId,
+                                    LoginUser loginUser, SseEmitter emitter)
     {
         String projectName = task.getProjectName();
         if (projectName == null || projectName.isBlank())
@@ -220,10 +237,17 @@ public class AiChatServiceImpl implements IAiChatService
             return;
         }
 
-        String dataText = projectDocService.getMergedProjectTextByProjectName(projectName);
+        Long projectId = resolveProjectId(projectName, selectedProjectId, loginUser);
+        if (projectId == null)
+        {
+            sendProjectRequired(task, userInput, emitter);
+            return;
+        }
+        projectName = projectAccessService.getProjectName(projectId);
+        String dataText = projectDocService.getMergedProjectText(projectId);
         if (dataText == null || dataText.isBlank())
         {
-            List<com.ruoyi.system.domain.ProjectDocument> docs = projectDocService.listProjectDocsByProjectName(projectName);
+            List<com.ruoyi.system.domain.ProjectDocument> docs = projectDocService.listDocuments(projectId, null);
             if (docs == null || docs.isEmpty())
             {
                 persistAndSend(conversationId, "⚠ 未检索到\"" + projectName + "\"的资料。", emitter);
@@ -247,7 +271,8 @@ public class AiChatServiceImpl implements IAiChatService
         executeStreamingWithPrompt(conversationId, systemPrompt, userInput, emitter);
     }
 
-    private void executeAnalyzeProject(Long conversationId, ChatTask task, String username, SseEmitter emitter)
+    private void executeAnalyzeProject(Long conversationId, ChatTask task, String userInput, String username,
+                                       Long selectedProjectId, LoginUser loginUser, SseEmitter emitter)
     {
         String projectName = task.getProjectName();
         if (projectName == null || projectName.isBlank())
@@ -256,7 +281,14 @@ public class AiChatServiceImpl implements IAiChatService
             return;
         }
 
-        String dataText = projectDocService.getMergedProjectTextByProjectName(projectName);
+        Long projectId = resolveProjectId(projectName, selectedProjectId, loginUser);
+        if (projectId == null)
+        {
+            sendProjectRequired(task, userInput, emitter);
+            return;
+        }
+        projectName = projectAccessService.getProjectName(projectId);
+        String dataText = projectDocService.getMergedProjectText(projectId);
         if (dataText == null || dataText.isBlank())
         {
             persistAndSend(conversationId, "⚠ 未找到\"" + projectName + "\"的可分析资料。", emitter);
@@ -264,7 +296,7 @@ public class AiChatServiceImpl implements IAiChatService
         }
 
         Map<String, Object> analysis = dataAnalyzeService.analyzeChart(
-                dataText, projectName, projectName, null, "chat", username);
+                dataText, projectName, projectId, projectName, null, "chat", username);
         Object analysisId = analysis.get("analysisId");
         String chatReply = "已为\"" + projectName + "\"生成数据驾驶舱，请点击下方链接查看。";
 
@@ -281,7 +313,8 @@ public class AiChatServiceImpl implements IAiChatService
         }
     }
 
-    private void executeForensic(Long conversationId, ChatTask task, String userInput, SseEmitter emitter)
+    private void executeForensic(Long conversationId, ChatTask task, String userInput, Long selectedProjectId,
+                                 LoginUser loginUser, SseEmitter emitter)
     {
         String projectName = task.getProjectName();
         if (projectName == null || projectName.isBlank())
@@ -290,16 +323,26 @@ public class AiChatServiceImpl implements IAiChatService
             return;
         }
 
+        Long projectId = resolveProjectId(projectName, selectedProjectId, loginUser);
+        if (projectId == null)
+        {
+            sendProjectRequired(task, userInput, emitter);
+            return;
+        }
+        projectName = projectAccessService.getProjectName(projectId);
+
         String issue = userInput.replaceAll("请|为|的|生成取证单|出具取证|取证单|【|】", "")
                 .replaceAll(projectName, "").trim();
         if (issue.isBlank()) issue = projectName + "项目审计问题";
 
         String projectContext = null;
-        try { projectContext = projectDocService.getMergedProjectTextByProjectName(projectName); }
+        try { projectContext = projectDocService.getMergedProjectText(projectId); }
         catch (Exception e) { log.warn("读取项目资料失败: {}", e.getMessage()); }
 
+        String basisIds = recallForensicBasisIds(issue, projectName, projectContext);
+
         com.ruoyi.system.domain.ForensicDraft draft =
-                ((AiForensicServiceImpl) aiForensicService).generateDraft(issue, null, projectName, projectContext);
+                ((AiForensicServiceImpl) aiForensicService).generateDraft(issue, basisIds, projectName, projectContext);
 
         if (draft == null)
         {
@@ -315,6 +358,42 @@ public class AiChatServiceImpl implements IAiChatService
         reply.append("\n\n---\n*取证单已保存，编号：").append(draft.getId()).append("*");
 
         persistAndSend(conversationId, reply.toString(), emitter);
+    }
+
+    /**
+     * 为取证单自动召回权限无关的公共法规依据，并返回可持久化的依据 ID。
+     * 召回失败不阻断取证单生成；生成端会明确标记法规依据待人工补充。
+     */
+    private String recallForensicBasisIds(String issue, String projectName, String projectContext)
+    {
+        StringBuilder query = new StringBuilder("审计取证法规依据：");
+        if (projectName != null && !projectName.isBlank()) query.append(projectName).append('；');
+        query.append(issue);
+        if (projectContext != null && !projectContext.isBlank())
+        {
+            int maxLength = Math.min(projectContext.length(), 2000);
+            query.append("\n项目资料摘要：").append(projectContext, 0, maxLength);
+        }
+
+        try
+        {
+            IAuditRagService.RagContext ragContext = auditRagService.executeRag(query.toString());
+            List<AuditBasis> recalled = ragContext == null ? null : ragContext.getRecalledBasis();
+            if (recalled == null || recalled.isEmpty()) return null;
+
+            String basisIds = recalled.stream()
+                    .filter(basis -> basis != null && basis.getId() != null)
+                    .filter(basis -> basis.getStatus() == null || basis.getStatus() == 1)
+                    .map(basis -> String.valueOf(basis.getId()))
+                    .distinct()
+                    .collect(Collectors.joining(","));
+            return basisIds.isBlank() ? null : basisIds;
+        }
+        catch (Exception e)
+        {
+            log.warn("取证单法规依据自动召回失败，将标记为待人工补充: {}", e.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -359,14 +438,14 @@ public class AiChatServiceImpl implements IAiChatService
      * QUERY_RECTIFICATION：查询整改情况
      * 查询 audit_issue + audit_rectification 统计整改进度
      */
-    private void executeQueryRectification(Long conversationId, ChatTask task, String userInput, SseEmitter emitter)
+    private void executeQueryRectification(Long conversationId, ChatTask task, String userInput, LoginUser loginUser, SseEmitter emitter)
     {
         String unitName = task.getUnitName();
 
         String filterClause = (unitName != null && !unitName.isBlank())
                 ? " AND p.audited_unit LIKE ? " : "";
 
-        String sql = "SELECT p.project_name, p.audited_unit, "
+        String sql = "SELECT p.id AS project_id, p.project_name, p.audited_unit, "
                 + "COUNT(i.id) AS total_issues, "
                 + "SUM(CASE WHEN r.status = 1 THEN 1 ELSE 0 END) AS completed, "
                 + "SUM(CASE WHEN r.status = 0 OR r.status IS NULL THEN 1 ELSE 0 END) AS pending, "
@@ -375,7 +454,7 @@ public class AiChatServiceImpl implements IAiChatService
                 + "JOIN audit_project p ON p.id = i.project_id "
                 + "LEFT JOIN audit_rectification r ON r.issue_id = i.id "
                 + "WHERE 1=1" + filterClause
-                + "GROUP BY p.project_name, p.audited_unit "
+                + "GROUP BY p.id, p.project_name, p.audited_unit "
                 + "ORDER BY overdue DESC, total_issues DESC";
 
         StringBuilder dataContext = new StringBuilder();
@@ -396,6 +475,7 @@ public class AiChatServiceImpl implements IAiChatService
 
                 while (rs.next())
                 {
+                    if (!projectAccessService.canAccessProject(rs.getLong("project_id"), loginUser)) continue;
                     int issues = rs.getInt("total_issues");
                     int completed = rs.getInt("completed");
                     int pending = rs.getInt("pending");
@@ -449,8 +529,13 @@ public class AiChatServiceImpl implements IAiChatService
      * RECOMMEND_OBJECT：AI 智能推荐审计对象
      * 调用已有的推荐 API，由 AI 综合分析
      */
-    private void executeRecommendObject(Long conversationId, ChatTask task, String userInput, SseEmitter emitter)
+    private void executeRecommendObject(Long conversationId, ChatTask task, String userInput, LoginUser loginUser, SseEmitter emitter)
     {
+        if (!projectAccessService.canAccessAllProjects(loginUser))
+        {
+            persistAndSend(conversationId, "当前账号无权查看跨单位审计对象推荐。", emitter);
+            return;
+        }
         Map<String, Object> recommendData;
         try
         {
@@ -497,6 +582,20 @@ public class AiChatServiceImpl implements IAiChatService
             return;
         }
         executeStreamingWithPrompt(conversationId, systemPrompt, userInput, emitter);
+    }
+
+    private void executeProjectStreamingTask(Long conversationId, ChatTask task, String userInput,
+                                             Long selectedProjectId, LoginUser loginUser,
+                                             SseEmitter emitter, boolean riskScan)
+    {
+        Long projectId = resolveProjectId(task.getProjectName(), selectedProjectId, loginUser);
+        if (projectId == null)
+        {
+            sendProjectRequired(task, userInput, emitter);
+            return;
+        }
+        String systemPrompt = riskScan ? buildRiskScanPrompt(projectId) : buildDocCheckPrompt(projectId);
+        executeStreamingTask(conversationId, task, userInput, emitter, systemPrompt);
     }
 
     /**
@@ -628,11 +727,10 @@ public class AiChatServiceImpl implements IAiChatService
     // Prompt 构建
     // ================================================================
 
-    private String buildRiskScanPrompt(ChatTask task)
+    private String buildRiskScanPrompt(Long projectId)
     {
-        String projectName = task.getProjectName();
-        if (projectName == null || projectName.isBlank()) return null;
-        String dataText = projectDocService.getMergedProjectTextByProjectName(projectName);
+        String projectName = projectAccessService.getProjectName(projectId);
+        String dataText = projectDocService.getMergedProjectText(projectId);
         if (dataText == null || dataText.isBlank()) return null;
         String truncated = dataText.length() > 8000 ? dataText.substring(0, 8000) + "\n..." : dataText;
         return "你是专业审计风险分析师。请基于\"" + projectName + "\"的资料分析风险点。\n"
@@ -640,11 +738,10 @@ public class AiChatServiceImpl implements IAiChatService
                 + "--- 项目资料 ---\n" + truncated + "\n--- 结束 ---";
     }
 
-    private String buildDocCheckPrompt(ChatTask task)
+    private String buildDocCheckPrompt(Long projectId)
     {
-        String projectName = task.getProjectName();
-        if (projectName == null || projectName.isBlank()) return null;
-        String dataText = projectDocService.getMergedProjectTextByProjectName(projectName);
+        String projectName = projectAccessService.getProjectName(projectId);
+        String dataText = projectDocService.getMergedProjectText(projectId);
         if (dataText == null || dataText.isBlank()) return null;
         String truncated = dataText.length() > 8000 ? dataText.substring(0, 8000) + "\n..." : dataText;
         return "你是专业审计文档核查专家。请对\"" + projectName + "\"的文档进行合规性核查。\n"
@@ -655,6 +752,25 @@ public class AiChatServiceImpl implements IAiChatService
     // ================================================================
     // 工具方法
     // ================================================================
+
+    private Long resolveProjectId(String projectName, Long selectedProjectId, LoginUser loginUser)
+    {
+        if (selectedProjectId != null)
+        {
+            return projectAccessService.canAccessProject(selectedProjectId, loginUser) ? selectedProjectId : null;
+        }
+        if (projectName == null || projectName.isBlank()) return null;
+        return projectAccessService.findAccessibleProjectId(projectName, loginUser);
+    }
+
+    private void sendProjectRequired(ChatTask task, String userInput, SseEmitter emitter)
+    {
+        Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("taskType", task.getTaskType());
+        payload.put("projectName", task.getProjectName());
+        payload.put("originalMessage", userInput);
+        sendSse(emitter, "project_required", com.alibaba.fastjson2.JSON.toJSONString(payload));
+    }
 
     /**
      * 持久化并发送消息（不发 done，不 complete）

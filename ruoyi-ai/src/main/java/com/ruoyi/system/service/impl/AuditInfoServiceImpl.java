@@ -3,6 +3,7 @@ package com.ruoyi.system.service.impl;
 import com.ruoyi.system.mapper.AuditInfoMapper;
 import com.ruoyi.system.service.IAuditInfoService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -12,6 +13,7 @@ import java.util.Map;
 public class AuditInfoServiceImpl implements IAuditInfoService
 {
     @Autowired private AuditInfoMapper mapper;
+    @Autowired private JdbcTemplate jdbcTemplate;
 
     public List<Map<String, Object>> selectPlanList(String type, Integer year) {
         var p = new com.ruoyi.system.domain.AuditPlan();
@@ -44,6 +46,7 @@ public class AuditInfoServiceImpl implements IAuditInfoService
         Object sc = u.get("staffCount"); if(sc!=null) e.setStaffCount(Integer.parseInt(String.valueOf(sc)));
         e.setFinanceContact((String)u.get("financeContact")); e.setContactPhone((String)u.get("contactPhone"));
         e.setAddress((String)u.get("address"));
+        e.setDeptId(ensureAuditDept(e));
         return mapper.insertUnit(e);
     }
     public int deleteUnitByIds(Long[] ids) { return mapper.deleteUnitByIds(ids); }
@@ -98,6 +101,7 @@ public class AuditInfoServiceImpl implements IAuditInfoService
         Object sc = u.get("staffCount"); if(sc!=null) e.setStaffCount(Integer.parseInt(String.valueOf(sc)));
         e.setFinanceContact((String)u.get("financeContact")); e.setContactPhone((String)u.get("contactPhone"));
         e.setAddress((String)u.get("address"));
+        e.setDeptId(ensureAuditDept(e));
         return mapper.updateUnit(e);
     }
     public int insertLeader(Map<String,Object> l) {
@@ -117,4 +121,66 @@ public class AuditInfoServiceImpl implements IAuditInfoService
         return mapper.updateLeader(e);
     }
     public int deleteLeaderByIds(Long[] ids) { return mapper.deleteLeaderByIds(ids); }
+
+    private Long ensureAuditDept(com.ruoyi.system.domain.AuditUnit unit)
+    {
+        String unitName = unit.getUnitName() == null ? null : unit.getUnitName().trim();
+        if (unitName == null || unitName.isEmpty())
+        {
+            return null;
+        }
+
+        List<Map<String, Object>> existing = jdbcTemplate.queryForList(
+                "SELECT dept_id, del_flag FROM sys_dept WHERE trim(dept_name) = trim(?) ORDER BY CASE WHEN del_flag = '0' THEN 0 ELSE 1 END, dept_id LIMIT 1",
+                unitName);
+        if (!existing.isEmpty())
+        {
+            Long deptId = ((Number) existing.get(0).get("dept_id")).longValue();
+            jdbcTemplate.update(
+                    "UPDATE sys_dept SET del_flag='0', status='0', unit_type=COALESCE(NULLIF(?, ''), unit_type, '被审计单位'), "
+                            + "profile=?, history_audit=?, is_audit_target=1, leader=COALESCE(NULLIF(?, ''), leader), "
+                            + "phone=COALESCE(NULLIF(?, ''), phone), update_by='admin', update_time=now() WHERE dept_id=?",
+                    unit.getUnitType(), unit.getProfile(), unit.getHistoryAudit(),
+                    unit.getParentLeader(), unit.getContactPhone(), deptId);
+            return deptId;
+        }
+
+        Map<String, Object> parent = findDefaultAuditParent();
+        Long parentId = ((Number) parent.get("dept_id")).longValue();
+        String parentAncestors = String.valueOf(parent.get("ancestors"));
+        String ancestors = parentId == 0 ? "0" : parentAncestors + "," + parentId;
+
+        Number deptId = jdbcTemplate.queryForObject(
+                "INSERT INTO sys_dept(parent_id, ancestors, dept_name, order_num, leader, phone, email, status, del_flag, create_by, create_time, update_by, update_time, unit_type, profile, history_audit, is_audit_target) "
+                        + "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING dept_id",
+                Number.class,
+                parentId, ancestors, unitName, 60,
+                emptyToDefault(unit.getParentLeader(), ""),
+                emptyToDefault(unit.getContactPhone(), ""),
+                "", "0", "0", "admin", new java.sql.Timestamp(System.currentTimeMillis()),
+                "", null,
+                emptyToDefault(unit.getUnitType(), "被审计单位"),
+                unit.getProfile(), unit.getHistoryAudit(), 1);
+        return deptId == null ? null : deptId.longValue();
+    }
+
+    private Map<String, Object> findDefaultAuditParent()
+    {
+        List<Map<String, Object>> parents = jdbcTemplate.queryForList(
+                "SELECT dept_id, ancestors FROM sys_dept WHERE del_flag='0' AND dept_name IN ('示范高校','若依科技') "
+                        + "ORDER BY CASE WHEN dept_name='示范高校' THEN 0 ELSE 1 END, dept_id LIMIT 1");
+        if (!parents.isEmpty())
+        {
+            return parents.get(0);
+        }
+        Map<String, Object> root = new LinkedHashMap<>();
+        root.put("dept_id", 0L);
+        root.put("ancestors", "0");
+        return root;
+    }
+
+    private String emptyToDefault(String value, String defaultValue)
+    {
+        return value == null || value.isBlank() ? defaultValue : value;
+    }
 }

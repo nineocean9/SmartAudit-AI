@@ -21,8 +21,10 @@ public class AuditProject extends BaseEntity
     @Excel(name = "项目名称")
     private String projectName;
 
-    @Excel(name = "被审单位")
+    @Excel(name = "被审计单位")
     private String auditedUnit;
+
+    private Long deptId;
 
     @Excel(name = "审计类型")
     private String auditType;
@@ -77,6 +79,8 @@ public class AuditProject extends BaseEntity
     public void setProjectName(String v) { this.projectName = v; }
     public String getAuditedUnit() { return auditedUnit; }
     public void setAuditedUnit(String v) { this.auditedUnit = v; }
+    public Long getDeptId() { return deptId; }
+    public void setDeptId(Long v) { this.deptId = v; }
     public String getAuditType() { return auditType; }
     public void setAuditType(String v) { this.auditType = v; }
     public Integer getAuditYear() { return auditYear; }

@@ -18,7 +18,7 @@
     </el-row>
     <el-table v-loading="loading" :data="list">
       <el-table-column label="项目" prop="projectName" width="200" show-overflow-tooltip />
-      <el-table-column label="被审单位" prop="auditedUnit" width="120" />
+      <el-table-column label="被审计单位" prop="auditedUnit" width="120" />
       <el-table-column label="问题描述" prop="issueDesc" show-overflow-tooltip />
       <el-table-column label="严重度" width="80">
         <template #default="scope">

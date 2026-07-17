@@ -6,6 +6,7 @@ import java.util.List;
 public interface AuditPlanAttachMapper
 {
     List<AuditPlanAttachment> selectByPlanId(Long planId);
+    AuditPlanAttachment selectById(Long id);
     int insert(AuditPlanAttachment att);
     int deleteById(Long id);
     int deleteByPlanId(Long planId);

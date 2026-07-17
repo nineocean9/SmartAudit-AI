@@ -12,7 +12,7 @@
       <!-- 顶部信息栏 -->
       <el-row :gutter="10" class="mb8">
         <el-col :span="1.5">
-          <el-button plain icon="Back" @click="$router.back()">返回</el-button>
+          <el-button plain icon="Back" @click="goBack">返回</el-button>
         </el-col>
         <el-col :span="1.5">
           <el-button type="primary" plain icon="Plus" @click="handleAddRow">新增行</el-button>
@@ -113,6 +113,15 @@ import { getExcelData, getDocDetail, updateExcelCell, addExcelRow, deleteExcelRo
 
 const route = useRoute()
 const router = useRouter()
+
+function goBack() {
+  const returnPath = route.query.returnPath
+  if (returnPath) {
+    router.push(String(returnPath))
+    return
+  }
+  router.back()
+}
 const docId = ref(null)
 const loading = ref(false)
 const error = ref(null)

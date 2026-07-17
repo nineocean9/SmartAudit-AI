@@ -11,7 +11,7 @@
 | 模块 | 已有功能 | 对应文件 |
 |------|---------|---------|
 | 审计计划 | 基础 CRUD + 绑定项目 + AI推荐 | `AuditInfoController` / `plan.vue` |
-| 被审单位 | 基础 CRUD + AI画像 | `AuditInfoController` / `unit.vue` |
+| 被审计单位 | 基础 CRUD + AI画像 | `AuditInfoController` / `unit.vue` |
 | 领导干部 | 基础 CRUD（字段少） | `AuditLeader` domain |
 | 审计项目 | 基础 CRUD（字段少） | `AuditProject` domain |
 | 审计底稿 | CRUD + 关联项目/依据 | `AuditOpsController` / `workpaper.vue` |
@@ -120,7 +120,7 @@ ALTER TABLE audit_plan ADD COLUMN IF NOT EXISTS description     TEXT;          -
 
 -- ===== 6. audit_project 表扩展字段 =====
 ALTER TABLE audit_project ADD COLUMN IF NOT EXISTS plan_id        BIGINT;      -- 关联计划ID
-ALTER TABLE audit_project ADD COLUMN IF NOT EXISTS leader_id      BIGINT;      -- 审计组长
+ALTER TABLE audit_project ADD COLUMN IF NOT EXISTS leader_id      BIGINT;      -- 项目组长
 ALTER TABLE audit_project ADD COLUMN IF NOT EXISTS start_date     DATE;        -- 实施开始日期
 ALTER TABLE audit_project ADD COLUMN IF NOT EXISTS end_date       DATE;        -- 实施结束日期
 ALTER TABLE audit_project ADD COLUMN IF NOT EXISTS coverage_start DATE;        -- 覆盖期间起
@@ -235,7 +235,7 @@ CREATE TABLE audit_unit_change_log (
 |---------|------|-----------|
 | 甘特图展示项目进度 | progress.vue已存在但功能简单 | 集成甘特图组件 |
 | 穿透式联动 | 无 | 点击项目名跳转详情 |
-| 资源调度视图 | 无 | 展示审计组长/人员负载 |
+| 资源调度视图 | 无 | 展示项目组长/人员负载 |
 | 进度预警 | 无 | 超期标红 + 消息推送 |
 
 ### 3.2 数据库变更
@@ -252,7 +252,7 @@ CREATE TABLE audit_project_member (
     project_id   BIGINT      NOT NULL,
     user_id      BIGINT      NOT NULL,                 -- 系统用户ID
     user_name    VARCHAR(64),                          -- 用户姓名
-    role_type    VARCHAR(20) NOT NULL,                 -- 角色: 组长/主审/成员
+    role_type    VARCHAR(20) NOT NULL,                 -- 角色: 项目组长/主审/成员
     task_scope   VARCHAR(500),                         -- 负责核查范围
     task_deadline DATE,                                -- 交付时限
     status       INT DEFAULT 0,                        -- 0进行中 1已完成
@@ -275,7 +275,7 @@ CREATE TABLE audit_project_member (
 | 文件 | 操作 | 说明 |
 |------|------|------|
 | `progress.vue` | **重写** | ①ECharts甘特图(按年度/类型分组) ②进度条+阶段标签 ③点击穿透跳转 ④超期标红预警 |
-| `resourceLoad.vue` | **新建** | 资源调度视图：每个审计组长/成员的项目负载柱状图 |
+| `resourceLoad.vue` | **新建** | 资源调度视图：每个项目组长/成员的项目负载柱状图 |
 | `api/audit/progress.js` | **新建** | 进度API |
 
 ---
@@ -289,7 +289,7 @@ CREATE TABLE audit_project_member (
 | 审计方案自动生成 | 无 | 按项目类型匹配模板一键生成 |
 | 审计通知书 | 无 | 标准化模板 + 自动填充 + 在线发送 |
 | 人员分工 | 无 | 项目成员管理（已在进度模块建表） |
-| 审前资料收集 | 仅有项目文档上传 | 资料清单 + 被审单位上传 + 审计人员上传 |
+| 审前资料收集 | 仅有项目文档上传 | 资料清单 + 被审计单位上传 + 审计人员上传 |
 
 ### 4.2 数据库变更
 
@@ -320,7 +320,7 @@ CREATE TABLE audit_material_checklist (
     file_path     VARCHAR(500),                        -- 上传文件路径
     submit_by     VARCHAR(64),                         -- 提交人
     submit_time   TIMESTAMP,
-    source        VARCHAR(20) DEFAULT 'unit',          -- 来源: unit=被审单位 auditor=审计人员
+    source        VARCHAR(20) DEFAULT 'unit',          -- 来源: unit=被审计单位 audit_staff=审计人员
     create_time   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -541,14 +541,14 @@ ALTER TABLE audit_basis ADD COLUMN IF NOT EXISTS hierarchy_level VARCHAR(20);   
 **利用RuoYi框架已有的角色-菜单-部门权限体系**，无需重写权限底层：
 
 ```
-步骤1：创建4个预设角色
+步骤1：创建7个预设业务角色
   ├── 校领导角色（school_leader）→ 菜单权限：驾驶舱+报告阅览+整改统计
-  ├── 被审单位角色（audit_unit）  → 菜单权限：本单位报告+整改+资料提交
-  ├── 审计人员角色（auditor）     → 菜单权限：全部审计业务模块
-  │   ├── 子角色：普通审计员      → 仅分配项目可见
-  │   ├── 子角色：项目组长/主审    → +项目维护+复核
-  │   └── 子角色：审计处长        → 全量数据+系统配置
-  └── 中介机构角色（outsource）   → 菜单权限：仅分配项目的作业模块
+  ├── 审计处长角色（audit_director）→ 全量审计业务+流程审批+系统配置
+  ├── 项目组长/主审（audit_project_leader）→ 项目维护+人员分工+底稿复核+报告编制
+  ├── 普通审计人员（audit_staff）→ 仅分配项目作业、数据分析、依据检索
+  ├── 被审计单位负责人（audited_unit_principal）→ 本单位报告+整改台账+整改复核结果
+  ├── 被审计单位联络员（audited_unit_liaison）→ 资料提交+取证回复+整改材料填报
+  └── 中介审计人员（intermediary_auditor）→ 仅临时授权项目的作业模块
 
 步骤2：数据权限配置
   ├── 使用 @DataScope 注解实现按部门(单位)过滤
@@ -568,7 +568,7 @@ CREATE TABLE audit_temp_auth (
     id           BIGSERIAL PRIMARY KEY,
     user_id      BIGINT NOT NULL,                      -- 系统用户ID
     project_id   BIGINT NOT NULL,                      -- 授权项目
-    auth_type    VARCHAR(20) DEFAULT 'outsource',      -- 授权类型
+    auth_type    VARCHAR(20) DEFAULT 'intermediary',   -- 授权类型
     start_date   DATE NOT NULL,                        -- 授权起始
     expire_date  DATE NOT NULL,                        -- 授权到期
     status       INT DEFAULT 1,                        -- 1有效 0已回收
@@ -579,13 +579,13 @@ CREATE TABLE audit_temp_auth (
 -- ===== 2. 预设角色数据（插入sys_role） =====
 INSERT INTO sys_role (role_id, role_name, role_key, role_sort, data_scope, status)
 VALUES
-(100, '校领导',     'school_leader', 10, '1', '0'),
-(101, '审计处长',   'audit_director', 11, '1', '0'),
-(102, '项目组长',   'audit_leader',   12, '3', '0'),
-(103, '普通审计员', 'auditor',        13, '4', '0'),
-(104, '被审单位负责人', 'unit_manager', 14, '5', '0'),
-(105, '被审单位联络员', 'unit_contact', 15, '5', '0'),
-(106, '中介审计人员',   'outsource',   16, '5', '0');
+(100, '校领导',             'school_leader', 10, '1', '0'),
+(101, '审计处长',           'audit_director', 20, '1', '0'),
+(102, '项目组长/主审',      'audit_project_leader', 30, '5', '0'),
+(103, '普通审计人员',       'audit_staff', 40, '5', '0'),
+(104, '被审计单位负责人',   'audited_unit_principal', 50, '3', '0'),
+(105, '被审计单位联络员',   'audited_unit_liaison', 60, '3', '0'),
+(106, '中介审计人员',       'intermediary_auditor', 70, '5', '0');
 ```
 
 ### 8.4 后端开发清单

@@ -11,13 +11,22 @@
             />
          </el-form-item>
          <el-form-item label="权限字符" prop="roleKey">
-            <el-input
+            <el-select
                v-model="queryParams.roleKey"
-               placeholder="请输入权限字符"
+               placeholder="请选择或输入权限字符"
+               filterable
+               allow-create
+               default-first-option
                clearable
                style="width: 240px"
-               @keyup.enter="handleQuery"
-            />
+            >
+               <el-option
+                  v-for="item in roleKeyOptions"
+                  :key="item.value"
+                  :label="item.label"
+                  :value="item.value"
+               />
+            </el-select>
          </el-form-item>
          <el-form-item label="状态" prop="status">
             <el-select
@@ -154,7 +163,22 @@
                      权限字符
                   </span>
                </template>
-               <el-input v-model="form.roleKey" placeholder="请输入权限字符" />
+               <el-select
+                  v-model="form.roleKey"
+                  filterable
+                  allow-create
+                  default-first-option
+                  clearable
+                  placeholder="请选择或输入权限字符"
+                  style="width: 100%"
+               >
+                  <el-option
+                     v-for="item in roleKeyOptions"
+                     :key="item.value"
+                     :label="item.label"
+                     :value="item.value"
+                  />
+               </el-select>
             </el-form-item>
             <el-form-item label="角色顺序" prop="roleSort">
                <el-input-number v-model="form.roleSort" controls-position="right" :min="0" />
@@ -248,6 +272,16 @@ import { roleMenuTreeselect, treeselect as menuTreeselect } from "@/api/system/m
 const router = useRouter()
 const { proxy } = getCurrentInstance()
 const { sys_normal_disable } = proxy.useDict("sys_normal_disable")
+const roleKeyOptions = [
+  { value: "school_leader", label: "校领导（school_leader）" },
+  { value: "audit_director", label: "审计处长（audit_director）" },
+  { value: "audit_project_leader", label: "项目组长/主审（audit_project_leader）" },
+  { value: "audit_staff", label: "普通审计人员（audit_staff）" },
+  { value: "audited_unit_principal", label: "被审计单位负责人（audited_unit_principal）" },
+  { value: "audited_unit_liaison", label: "被审计单位联络员（audited_unit_liaison）" },
+  { value: "intermediary_auditor", label: "中介审计人员（intermediary_auditor）" },
+  { value: "admin", label: "超级管理员（admin）" }
+]
 
 const roleList = ref([])
 const open = ref(false)

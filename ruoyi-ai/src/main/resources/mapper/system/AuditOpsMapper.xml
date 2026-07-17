@@ -9,16 +9,20 @@
         <result property="createBy" column="create_by"/><result property="createTime" column="create_time"/>
     </resultMap>
     <resultMap id="RptResult" type="AuditReport"><id property="id" column="id"/>
-        <result property="projectId" column="project_id"/><result property="versionType" column="version_type"/>
+        <result property="projectId" column="project_id"/><result property="title" column="title"/>
+        <result property="versionType" column="version_type"/>
         <result property="content" column="content"/><result property="status" column="status"/>
+        <result property="fileUrl" column="file_url"/>
         <result property="projectName" column="project_name"/>
         <result property="auditedUnit" column="audited_unit"/>
         <result property="createBy" column="create_by"/><result property="createTime" column="create_time"/>
     </resultMap>
 
-    <select id="selectSchemeList" resultType="java.util.Map">SELECT s.*,p.project_name,p.audited_unit FROM audit_scheme s JOIN audit_project p ON p.id=s.project_id
+    <select id="selectSchemeList" resultType="java.util.Map">SELECT s.*,p.project_name,p.audited_unit,t.template_name FROM audit_scheme s JOIN audit_project p ON p.id=s.project_id LEFT JOIN audit_scheme_template t ON t.id::varchar=s.template_id
         <where><if test="projectId!=null">AND s.project_id=#{projectId}</if></where> ORDER BY s.create_time DESC</select>
-    <insert id="insertScheme">INSERT INTO audit_scheme(project_id,content,template_id,status,create_by,create_time) VALUES(#{projectId},#{content},#{templateId},0,'admin',now())</insert>
+    <select id="selectSchemeById" resultType="java.util.Map">SELECT s.*,p.project_name,p.audited_unit,t.template_name FROM audit_scheme s JOIN audit_project p ON p.id=s.project_id LEFT JOIN audit_scheme_template t ON t.id::varchar=s.template_id WHERE s.id=#{id}</select>
+    <insert id="insertScheme" useGeneratedKeys="true" keyProperty="id">INSERT INTO audit_scheme(project_id,title,content,template_id,file_url,status,create_by,create_time) VALUES(#{projectId},#{title},#{content},#{templateId},#{fileUrl},0,#{createBy},now())</insert>
+    <update id="updateSchemeContent">UPDATE audit_scheme SET content=#{content},update_time=now() WHERE id=#{id}</update>
 
     <select id="selectWorkpaperList" resultMap="WpResult">SELECT w.id,w.project_id,w.category,w.title,w.content,w.basis_ids,w.status,w.create_by,w.create_time,w.update_time,p.project_name FROM audit_workpaper w JOIN audit_project p ON p.id=w.project_id
         <where><if test="projectId!=null">AND w.project_id=#{projectId}</if><if test="category!=null">AND w.category=#{category}</if></where> ORDER BY w.create_time DESC</select>
@@ -29,11 +33,12 @@
     <select id="selectReviewList" resultType="java.util.Map">SELECT * FROM audit_review WHERE workpaper_id=#{workpaperId} ORDER BY create_time ASC</select>
     <insert id="insertReview">INSERT INTO audit_review(workpaper_id,reviewer,level,opinion,status) VALUES(#{workpaperId},#{reviewer},#{level},#{opinion},#{status})</insert>
 
-    <select id="selectReportList" resultMap="RptResult">SELECT r.id,r.project_id,r.version_type,r.content,r.status,r.create_by,r.create_time,r.update_time,p.project_name,p.audited_unit FROM audit_report r JOIN audit_project p ON p.id=r.project_id
+    <select id="selectReportList" resultMap="RptResult">SELECT r.id,r.project_id,r.title,r.version_type,r.content,r.file_url,r.status,r.create_by,r.create_time,r.update_time,p.project_name,p.audited_unit FROM audit_report r JOIN audit_project p ON p.id=r.project_id
         <where><if test="projectId!=null">AND r.project_id=#{projectId}</if></where> ORDER BY r.create_time DESC</select>
     <select id="selectReportById" resultMap="RptResult">SELECT * FROM audit_report WHERE id=#{id}</select>
-    <insert id="insertReport" parameterType="AuditReport" useGeneratedKeys="true" keyProperty="id">INSERT INTO audit_report(project_id,version_type,content,status,create_by,create_time) VALUES(#{projectId},#{versionType},#{content},0,#{createBy},now())</insert>
-    <update id="updateReport" parameterType="AuditReport">UPDATE audit_report SET content=#{content},version_type=#{versionType},status=#{status},update_time=now() WHERE id=#{id}</update>
+    <insert id="insertReport" parameterType="AuditReport" useGeneratedKeys="true" keyProperty="id">INSERT INTO audit_report(project_id,title,version_type,content,file_url,status,create_by,create_time) VALUES(#{projectId},#{title},#{versionType},#{content},#{fileUrl},0,#{createBy},now())</insert>
+    <update id="updateReport" parameterType="AuditReport">UPDATE audit_report SET title=#{title},content=#{content},version_type=#{versionType},file_url=#{fileUrl},status=#{status},update_time=now() WHERE id=#{id}</update>
+    <update id="updateReportContent" parameterType="AuditReport">UPDATE audit_report SET content=#{content},update_time=now() WHERE id=#{id}</update>
 
     <select id="selectCollabLog" resultType="java.util.Map">SELECT c.*,u.user_name FROM audit_collab_log c LEFT JOIN sys_user u ON u.user_id=c.user_id
         WHERE c.project_id=#{projectId} ORDER BY c.create_time DESC</select>

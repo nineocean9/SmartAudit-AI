@@ -7,7 +7,7 @@ import java.math.BigDecimal;
 import java.util.Date;
 
 /**
- * 被审单位实体
+ * 被审计单位实体
  * 对应数据库表 audit_unit
  *
  * @author ruoyi
@@ -17,6 +17,8 @@ public class AuditUnit extends BaseEntity
     private static final long serialVersionUID = 1L;
 
     private Long id;
+
+    private Long deptId;
 
     @Excel(name = "单位名称")
     private String unitName;
@@ -57,6 +59,8 @@ public class AuditUnit extends BaseEntity
 
     public Long getId() { return id; }
     public void setId(Long v) { this.id = v; }
+    public Long getDeptId() { return deptId; }
+    public void setDeptId(Long v) { this.deptId = v; }
     public String getUnitName() { return unitName; }
     public void setUnitName(String v) { this.unitName = v; }
     public String getUnitType() { return unitType; }

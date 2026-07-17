@@ -68,11 +68,11 @@
               <el-option v-for="t in auditTypes" :key="t" :label="t" :value="t" />
             </el-select>
           </el-form-item>
-          <el-form-item label="被审单位">
+          <el-form-item label="被审计单位">
             <el-input v-model="newAuditedUnit" placeholder="如：信息工程学院" />
           </el-form-item>
-          <el-form-item label="负责人">
-            <el-input v-model="newLeader" placeholder="项目负责人姓名" />
+          <el-form-item label="项目组长/主审">
+            <el-input v-model="newLeader" placeholder="项目组长或主审姓名" />
           </el-form-item>
           <el-form-item label="资料类型">
             <el-select v-model="docType" placeholder="选择类型" style="width:100%">

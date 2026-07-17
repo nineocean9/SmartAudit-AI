@@ -1,6 +1,7 @@
 package com.ruoyi.system.domain;
 
 import com.ruoyi.common.core.domain.BaseEntity;
+import java.util.List;
 
 /**
  * 取证单草稿实体
@@ -17,6 +18,10 @@ public class ForensicDraft extends BaseEntity
     private String suggestion;
     private Integer reviewStatus;
     private String reviewLog;
+    private String projectName;
+    private String auditedUnit;
+    /** 详情展示使用的引用依据，不对应数据库字段。 */
+    private List<AuditBasis> basisList;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -32,4 +37,10 @@ public class ForensicDraft extends BaseEntity
     public void setReviewStatus(Integer reviewStatus) { this.reviewStatus = reviewStatus; }
     public String getReviewLog() { return reviewLog; }
     public void setReviewLog(String reviewLog) { this.reviewLog = reviewLog; }
+    public String getProjectName() { return projectName; }
+    public void setProjectName(String projectName) { this.projectName = projectName; }
+    public String getAuditedUnit() { return auditedUnit; }
+    public void setAuditedUnit(String auditedUnit) { this.auditedUnit = auditedUnit; }
+    public List<AuditBasis> getBasisList() { return basisList; }
+    public void setBasisList(List<AuditBasis> basisList) { this.basisList = basisList; }
 }

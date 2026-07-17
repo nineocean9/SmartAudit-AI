@@ -12,6 +12,7 @@
             :data="projectTree"
             :props="treeProps"
             node-key="id"
+            :current-node-key="curProjectId"
             :highlight-current="true"
             @node-click="onNodeClick"
           >
@@ -43,11 +44,13 @@
               <div v-for="doc in group" :key="doc.id" class="doc-item">
                 <el-icon><Document /></el-icon>
                 <span class="doc-name">{{ doc.fileName }}</span>
+                <el-tag v-if="doc.status === 0" size="small" type="warning">待确认</el-tag>
                 <span class="doc-meta">{{ formatSize(doc.fileSize) }} · {{ doc.createTime }}</span>
                 <span style="margin-left: auto">
-                  <el-button text size="small" @click="viewDoc(doc)">查看</el-button>
-                  <el-button text size="small" @click="downloadDoc(doc)">下载</el-button>
-                  <el-button text size="small" type="danger" @click="removeDoc(doc.id)">删除</el-button>
+                  <el-button v-if="doc.status === 0" text size="small" type="warning" @click="goConfirm">去确认</el-button>
+                  <el-button v-else text size="small" @click="viewDoc(doc)">查看</el-button>
+                  <el-button v-if="doc.status !== 0" text size="small" @click="downloadDoc(doc)">下载</el-button>
+                  <el-button v-if="doc.status !== 0" text size="small" type="danger" @click="removeDoc(doc.id)">删除</el-button>
                 </span>
               </div>
               <el-empty v-if="group.length === 0" :description="`暂无${type}`" />
@@ -68,7 +71,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Folder, Document } from '@element-plus/icons-vue'
 import { getToken } from '@/utils/auth'
@@ -78,6 +81,7 @@ import { createTempSession } from '@/api/knowledge/tempWorkspace'
 import FileUploader from '@/components/AiChat/FileUploader.vue'
 
 const router = useRouter()
+const route = useRoute()
 const projectTree = ref([])
 const curProjectId = ref(null)
 const curProjectName = ref('')
@@ -86,8 +90,9 @@ const loadingDocs = ref(false)
 const showUpload = ref(false)
 const tempSessionId = ref(null)
 
-onMounted(() => {
-  loadTree()
+onMounted(async () => {
+  await loadTree()
+  restoreSelectedProject()
   // 初始化临时 session
   createTempSession().then(res => {
     if (res.code === 200) tempSessionId.value = res.data.sessionId
@@ -98,8 +103,6 @@ const treeProps = {
   children: 'children',
   label: 'label'
 }
-
-onMounted(() => loadTree())
 
 async function loadTree() {
   try {
@@ -129,7 +132,22 @@ function onNodeClick(data) {
   if (!data.id || data.isPlan) return // 跳过计划节点
   curProjectId.value = data.id
   curProjectName.value = data.projectName || data.label
+  router.replace({ path: route.path, query: { ...route.query, projectId: String(data.id) } })
   loadDocs(data.id)
+}
+
+function restoreSelectedProject() {
+  const projectId = Number(route.query.projectId)
+  if (!projectId) return
+  for (const plan of projectTree.value) {
+    const project = (plan.children || []).find(item => Number(item.id) === projectId)
+    if (project) {
+      curProjectId.value = project.id
+      curProjectName.value = project.projectName || project.label
+      loadDocs(project.id)
+      return
+    }
+  }
 }
 
 async function loadDocs(projectId) {
@@ -165,12 +183,12 @@ function viewDoc(doc) {
   // Excel 文件 → 跳转到独立表格查看页
   const ext = doc.fileName?.split('.').pop()?.toLowerCase()
   if (ext === 'xlsx' || ext === 'xls') {
-    router.push(`/audit/excel-view?id=${doc.id}`)
+    router.push(`/audit/excel-view?id=${doc.id}&returnPath=${encodeURIComponent(projectReturnPath())}`)
     return
   }
   // Word / PDF 文件 → 跳转到文档预览页
   if (ext === 'docx' || ext === 'pdf') {
-    router.push(`/audit/doc-preview?id=${doc.id}`)
+    router.push(`/audit/doc-preview?id=${doc.id}&returnPath=${encodeURIComponent(projectReturnPath())}`)
     return
   }
   // 其他文件 → 弹窗显示纯文本
@@ -193,6 +211,15 @@ function viewDoc(doc) {
     doc.fileName,
     { dangerouslyUseHTMLString: true, width: '700px' }
   )
+}
+
+function projectReturnPath() {
+  return '/audit/projectLib?projectId=' + encodeURIComponent(curProjectId.value || '')
+}
+
+function goConfirm() {
+  ElMessage.warning('待被审计单位负责人确认，确认后才能在项目库查看')
+  router.push({ path: '/audit/prepare', query: { projectId: curProjectId.value } })
 }
 
 function downloadDoc(doc) {

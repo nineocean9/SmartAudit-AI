@@ -2,6 +2,8 @@ package com.ruoyi.system.service.impl;
 
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.system.domain.ForensicDraft;
+import com.ruoyi.system.domain.AuditBasis;
+import com.ruoyi.system.mapper.AuditBasisMapper;
 import com.ruoyi.system.mapper.ForensicDraftMapper;
 import com.ruoyi.system.service.IAiForensicService;
 import dev.langchain4j.model.chat.ChatLanguageModel;
@@ -26,6 +28,9 @@ public class AiForensicServiceImpl implements IAiForensicService
     private ForensicDraftMapper forensicDraftMapper;
 
     @Autowired
+    private AuditBasisMapper auditBasisMapper;
+
+    @Autowired
     private ChatLanguageModel chatModel;
 
     @Autowired
@@ -40,13 +45,56 @@ public class AiForensicServiceImpl implements IAiForensicService
     @Override
     public ForensicDraft selectForensicDraftById(Long id)
     {
-        return forensicDraftMapper.selectForensicDraftById(id);
+        ForensicDraft draft = forensicDraftMapper.selectForensicDraftById(id);
+        if (draft != null)
+        {
+            draft.setBasisList(resolveBasisList(draft.getBasisIds()));
+        }
+        return draft;
+    }
+
+    private List<AuditBasis> resolveBasisList(String basisIds)
+    {
+        List<AuditBasis> result = new ArrayList<>();
+        if (basisIds == null || basisIds.isBlank()) return result;
+        for (String idText : basisIds.split(","))
+        {
+            try
+            {
+                AuditBasis basis = auditBasisMapper.selectAuditBasisById(Long.parseLong(idText.trim()));
+                if (basis != null) result.add(basis);
+            }
+            catch (NumberFormatException e)
+            {
+                log.warn("忽略无效的取证依据ID: {}", idText);
+            }
+        }
+        return result;
     }
 
     @Override
     public ForensicDraft generateDraft(String issue, String basisIds)
     {
         return generateDraft(issue, basisIds, null, null);
+    }
+
+    @Override
+    public ForensicDraft generateDraft(String issue, String basisIds, Long projectId)
+    {
+        String projectName = null;
+        String projectContext = null;
+        if (projectId != null)
+        {
+            projectName = lookupProjectName(projectId);
+            projectContext = loadProjectContext(projectId);
+        }
+        ForensicDraft draft = generateDraft(issue, basisIds, projectName, projectContext);
+        if (projectId != null)
+        {
+            draft.setProjectId(projectId);
+            forensicDraftMapper.updateForensicDraft(draft);
+        }
+        return draft;
     }
 
     /**
@@ -121,6 +169,14 @@ public class AiForensicServiceImpl implements IAiForensicService
         if (basisContent != null && !basisContent.isBlank())
         {
             sb.append("**可参考的审计依据：**\n").append(basisContent).append("\n\n");
+            sb.append("法规引用约束：只能引用上方已提供的审计依据，不得虚构法规名称、文号或条款；")
+                    .append("依据内容无法支撑的事项，请明确标注“待人工补充依据”。\n\n");
+        }
+        else
+        {
+            sb.append("**审计依据：** 当前依据库未检索到可确认的法规。\n\n");
+            sb.append("法规引用约束：不得依据模型记忆自行编造法规名称、文号或条款，")
+                    .append("“四、适用法规依据”请填写“待人工补充依据”。\n\n");
         }
 
         if (projectContext != null && !projectContext.isBlank())
@@ -181,6 +237,56 @@ public class AiForensicServiceImpl implements IAiForensicService
         }
         catch (Exception e) { /* ignore */ }
         return null;
+    }
+
+    private String lookupProjectName(Long projectId)
+    {
+        if (projectId == null) return null;
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement("SELECT project_name FROM audit_project WHERE id = ?"))
+        {
+            ps.setLong(1, projectId);
+            try (ResultSet rs = ps.executeQuery())
+            {
+                return rs.next() ? rs.getString("project_name") : null;
+            }
+        }
+        catch (Exception e)
+        {
+            return null;
+        }
+    }
+
+    private String loadProjectContext(Long projectId)
+    {
+        if (projectId == null) return null;
+        List<String> parts = new ArrayList<>();
+        String sql = "SELECT doc_type, file_name, content_text FROM project_document WHERE project_id = ? AND status = 1 ORDER BY create_time DESC LIMIT 6";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql))
+        {
+            ps.setLong(1, projectId);
+            try (ResultSet rs = ps.executeQuery())
+            {
+                while (rs.next())
+                {
+                    String content = rs.getString("content_text");
+                    if (content == null || content.isBlank()) continue;
+                    parts.add("【" + rs.getString("doc_type") + "】" + rs.getString("file_name") + "\n" + content);
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            log.warn("加载项目资料上下文失败: projectId={}", projectId, e);
+        }
+        return parts.isEmpty() ? null : String.join("\n\n", parts);
+    }
+
+    @Override
+    public int updateForensicDraft(ForensicDraft draft)
+    {
+        return forensicDraftMapper.updateForensicDraft(draft);
     }
 
     @Override

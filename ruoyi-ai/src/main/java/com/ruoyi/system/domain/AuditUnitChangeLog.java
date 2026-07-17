@@ -5,7 +5,7 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import java.util.Date;
 
 /**
- * 被审单位变更日志实体
+ * 被审计单位变更日志实体
  * 对应数据库表 audit_unit_change_log
  *
  * @author ruoyi

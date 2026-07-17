@@ -3,6 +3,7 @@ package com.ruoyi.system.controller;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.core.page.TableDataInfo;
+import com.ruoyi.system.service.AuditProjectAccessService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -25,6 +26,9 @@ public class AuditIssueController extends BaseController
 {
     @Autowired
     private DataSource dataSource;
+
+    @Autowired
+    private AuditProjectAccessService projectAccessService;
 
     /**
      * 分页列表
@@ -86,7 +90,10 @@ public class AuditIssueController extends BaseController
                     row.put("createTime", rs.getString("create_time"));
                     row.put("projectName", rs.getString("project_name"));
                     row.put("basisTitle", rs.getString("basis_title"));
-                    list.add(row);
+                    if (projectAccessService.canAccessProject(rs.getLong("project_id")))
+                    {
+                        list.add(row);
+                    }
                 }
             }
         }
@@ -127,6 +134,10 @@ public class AuditIssueController extends BaseController
                     row.put("createTime", rs.getString("create_time"));
                     row.put("projectName", rs.getString("project_name"));
                     row.put("basisTitle", rs.getString("basis_title"));
+                    if (!projectAccessService.canAccessProject(rs.getLong("project_id")))
+                    {
+                        return error("无权访问该项目问题");
+                    }
                     return success(row);
                 }
             }
@@ -148,7 +159,9 @@ public class AuditIssueController extends BaseController
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql))
         {
-            ps.setLong(1, Long.parseLong(body.get("projectId").toString()));
+            Long projectId = Long.parseLong(body.get("projectId").toString());
+            if (!projectAccessService.canAccessProject(projectId)) return error("无权维护该项目问题");
+            ps.setLong(1, projectId);
             ps.setString(2, (String) body.get("issueDesc"));
             ps.setInt(3, body.get("severity") != null ? Integer.parseInt(body.get("severity").toString()) : 1);
             if (body.get("basisId") != null && !body.get("basisId").toString().isEmpty())
@@ -180,7 +193,9 @@ public class AuditIssueController extends BaseController
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql))
         {
-            ps.setLong(1, Long.parseLong(body.get("projectId").toString()));
+            Long projectId = Long.parseLong(body.get("projectId").toString());
+            if (!projectAccessService.canAccessProject(projectId)) return error("无权维护该项目问题");
+            ps.setLong(1, projectId);
             ps.setString(2, (String) body.get("issueDesc"));
             ps.setInt(3, body.get("severity") != null ? Integer.parseInt(body.get("severity").toString()) : 1);
             if (body.get("basisId") != null && !body.get("basisId").toString().isEmpty())
@@ -240,7 +255,12 @@ public class AuditIssueController extends BaseController
             while (rs.next())
             {
                 Map<String, Object> m = new LinkedHashMap<>();
-                m.put("id", rs.getLong("id"));
+                Long projectId = rs.getLong("id");
+                if (!projectAccessService.canAccessProject(projectId))
+                {
+                    continue;
+                }
+                m.put("id", projectId);
                 m.put("projectName", rs.getString("project_name"));
                 list.add(m);
             }

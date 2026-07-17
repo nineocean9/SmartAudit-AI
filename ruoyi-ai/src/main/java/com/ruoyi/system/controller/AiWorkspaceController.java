@@ -2,6 +2,7 @@ package com.ruoyi.system.controller;
 
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.utils.SecurityUtils;
+import com.ruoyi.system.service.AuditProjectAccessService;
 import com.ruoyi.system.service.ITempWorkspaceService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -34,6 +35,9 @@ public class AiWorkspaceController
     @Autowired
     private ITempWorkspaceService tempWorkspaceService;
 
+    @Autowired
+    private AuditProjectAccessService projectAccessService;
+
     /**
      * 获取项目列表树
      * GET /ai/workspace/projects
@@ -61,7 +65,7 @@ public class AiWorkspaceController
 
                     // 查询该计划下的项目
                     List<Map<String, Object>> projects = new ArrayList<>();
-                    String projSql = "SELECT id, project_name, audited_unit, audit_type, audit_year, status, "
+                    String projSql = "SELECT id, project_name, audited_unit, dept_id, audit_type, audit_year, status, "
                                    + "COALESCE(doc_count, 0) AS doc_count "
                                    + "FROM audit_project WHERE plan_id = ? ORDER BY id DESC";
                     try (PreparedStatement ps2 = conn.prepareStatement(projSql))
@@ -72,9 +76,16 @@ public class AiWorkspaceController
                             while (rs2.next())
                             {
                                 Map<String, Object> proj = new LinkedHashMap<>();
-                                proj.put("id", rs2.getLong("id"));
+                                Long projectId = rs2.getLong("id");
+                                String auditedUnit = rs2.getString("audited_unit");
+                                if (!projectAccessService.shouldShowProject(projectId, auditedUnit))
+                                {
+                                    continue;
+                                }
+                                proj.put("id", projectId);
                                 proj.put("projectName", rs2.getString("project_name"));
-                                proj.put("auditedUnit", rs2.getString("audited_unit"));
+                                proj.put("auditedUnit", auditedUnit);
+                                proj.put("deptId", rs2.getObject("dept_id"));
                                 proj.put("auditType", rs2.getString("audit_type"));
                                 proj.put("auditYear", rs2.getInt("audit_year"));
                                 proj.put("status", rs2.getInt("status"));
@@ -83,8 +94,11 @@ public class AiWorkspaceController
                             }
                         }
                     }
-                    plan.put("projects", projects);
-                    planList.add(plan);
+                    if (!projects.isEmpty())
+                    {
+                        plan.put("projects", projects);
+                        planList.add(plan);
+                    }
                 }
             }
         }
@@ -146,7 +160,7 @@ public class AiWorkspaceController
     public AjaxResult listProjectsByPlan(@PathVariable Long planId)
     {
         List<Map<String, Object>> projects = new ArrayList<>();
-        String sql = "SELECT id, project_name, audited_unit, audit_type, audit_year, status "
+        String sql = "SELECT id, project_name, audited_unit, dept_id, audit_type, audit_year, status "
                    + "FROM audit_project WHERE plan_id = ? ORDER BY id DESC";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql))
@@ -157,9 +171,16 @@ public class AiWorkspaceController
                 while (rs.next())
                 {
                     Map<String, Object> proj = new LinkedHashMap<>();
-                    proj.put("id", rs.getLong("id"));
+                    Long projectId = rs.getLong("id");
+                    String auditedUnit = rs.getString("audited_unit");
+                    if (!projectAccessService.shouldShowProject(projectId, auditedUnit))
+                    {
+                        continue;
+                    }
+                    proj.put("id", projectId);
                     proj.put("projectName", rs.getString("project_name"));
-                    proj.put("auditedUnit", rs.getString("audited_unit"));
+                    proj.put("auditedUnit", auditedUnit);
+                    proj.put("deptId", rs.getObject("dept_id"));
                     proj.put("auditType", rs.getString("audit_type"));
                     proj.put("auditYear", rs.getInt("audit_year"));
                     projects.add(proj);
@@ -206,16 +227,18 @@ public class AiWorkspaceController
 
         try (Connection conn = dataSource.getConnection())
         {
-            String sql = "INSERT INTO audit_project (project_name, audited_unit, audit_type, audit_year, "
+            Long deptId = resolveDeptId(conn, auditedUnit);
+            String sql = "INSERT INTO audit_project (project_name, audited_unit, dept_id, audit_type, audit_year, "
                        + "plan_id, status, create_time, update_time) "
-                       + "VALUES (?, ?, ?, ?, ?, 0, now(), now()) RETURNING id";
+                       + "VALUES (?, ?, ?, ?, ?, ?, 0, now(), now()) RETURNING id";
             try (PreparedStatement ps = conn.prepareStatement(sql))
             {
                 ps.setString(1, projectName);
                 ps.setString(2, auditedUnit != null ? auditedUnit : "");
-                ps.setString(3, auditType != null ? auditType : "其他");
-                ps.setInt(4, java.time.LocalDate.now().getYear());
-                ps.setObject(5, planIdNum != null ? planIdNum.longValue() : null, java.sql.Types.BIGINT);
+                ps.setObject(3, deptId, java.sql.Types.BIGINT);
+                ps.setString(4, auditType != null ? auditType : "其他");
+                ps.setInt(5, java.time.LocalDate.now().getYear());
+                ps.setObject(6, planIdNum != null ? planIdNum.longValue() : null, java.sql.Types.BIGINT);
 
                 try (ResultSet rs = ps.executeQuery())
                 {
@@ -226,6 +249,7 @@ public class AiWorkspaceController
                         result.put("projectName", projectName);
                         result.put("auditType", auditType);
                         result.put("auditedUnit", auditedUnit);
+                        result.put("deptId", deptId);
                         result.put("createBy", createBy);
                         return success(result);
                     }
@@ -237,5 +261,22 @@ public class AiWorkspaceController
             return AjaxResult.error("创建项目失败: " + e.getMessage());
         }
         return AjaxResult.error("创建项目失败");
+    }
+
+    private Long resolveDeptId(Connection conn, String auditedUnit) throws Exception
+    {
+        if (auditedUnit == null || auditedUnit.isBlank())
+        {
+            return null;
+        }
+        String sql = "SELECT dept_id FROM sys_dept WHERE del_flag='0' AND trim(dept_name)=trim(?) LIMIT 1";
+        try (PreparedStatement ps = conn.prepareStatement(sql))
+        {
+            ps.setString(1, auditedUnit);
+            try (ResultSet rs = ps.executeQuery())
+            {
+                return rs.next() ? rs.getLong("dept_id") : null;
+            }
+        }
     }
 }

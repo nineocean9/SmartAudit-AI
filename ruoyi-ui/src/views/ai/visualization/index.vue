@@ -34,7 +34,7 @@
     </el-row>
 
     <el-table v-loading="loading" :data="analysisList" @selection-change="handleSelectionChange">
-      <el-table-column type="selection" width="55" align="center" />
+      <el-table-column type="selection" width="55" align="center" :selectable="row => row.canManage" />
       <el-table-column label="编号" align="center" prop="id" width="70" />
       <el-table-column label="分析名称" align="center" prop="title" :show-overflow-tooltip="true" min-width="200">
         <template #default="{ row }">
@@ -63,10 +63,10 @@
             <el-button link type="primary" icon="View" @click="viewDashboard(row)"></el-button>
           </el-tooltip>
           <el-tooltip content="修改" placement="top">
-            <el-button link type="primary" icon="Edit" @click="handleUpdate(row)"></el-button>
+            <el-button v-if="row.canManage" link type="primary" icon="Edit" @click="handleUpdate(row)"></el-button>
           </el-tooltip>
           <el-tooltip content="删除" placement="top">
-            <el-button link type="primary" icon="Delete" @click="handleDelete(row)"></el-button>
+            <el-button v-if="row.canManage" link type="primary" icon="Delete" @click="handleDelete(row)"></el-button>
           </el-tooltip>
         </template>
       </el-table-column>
@@ -81,7 +81,7 @@
           <el-input v-model="editForm.title" placeholder="请输入分析名称" />
         </el-form-item>
         <el-form-item label="关联项目" prop="projectName">
-          <el-input v-model="editForm.projectName" placeholder="请输入关联项目" />
+          <el-input v-model="editForm.projectName" disabled />
         </el-form-item>
         <el-form-item label="关键词" prop="keyword">
           <el-input v-model="editForm.keyword" placeholder="请输入关键词" />
@@ -107,9 +107,9 @@
 
         <template v-if="sourceType === 'project'">
           <el-form-item label="选择项目" required>
-            <el-select v-model="createForm.projectName" placeholder="搜索或选择项目" filterable allow-create style="width:100%">
+            <el-select v-model="createForm.projectId" placeholder="搜索或选择有权访问的项目" filterable style="width:100%">
               <el-option-group v-for="plan in projectTree" :key="plan.planId" :label="plan.label || plan.planName">
-                <el-option v-for="p in plan.projects" :key="p.id" :label="`${p.projectName}（${p.auditedUnit || ''}·${p.auditType || ''}）`" :value="p.projectName" />
+                <el-option v-for="p in plan.projects" :key="p.id" :label="`${p.projectName}（${p.auditedUnit || ''}·${p.auditType || ''}）`" :value="p.id" />
               </el-option-group>
               <el-option v-if="projectTree.length === 0" label="暂无项目数据，可手动输入" value="" disabled />
             </el-select>
@@ -129,10 +129,10 @@
             </el-upload>
             <div v-if="uploadFile" style="margin-top:6px;font-size:13px;color:#409eff">已选择: {{ uploadFile.name }}</div>
           </el-form-item>
-          <el-form-item label="关联项目">
-            <el-select v-model="createForm.projectName" placeholder="可选，选择关联项目" filterable allow-create clearable style="width:100%">
+          <el-form-item label="关联项目" required>
+            <el-select v-model="createForm.projectId" placeholder="请选择有权访问的关联项目" filterable style="width:100%">
               <el-option-group v-for="plan in projectTree" :key="plan.planId" :label="plan.label || plan.planName">
-                <el-option v-for="p in plan.projects" :key="p.id" :label="p.projectName" :value="p.projectName" />
+                <el-option v-for="p in plan.projects" :key="p.id" :label="p.projectName" :value="p.id" />
               </el-option-group>
             </el-select>
           </el-form-item>
@@ -189,15 +189,15 @@ const editRules = { title: [{ required: true, message: '请输入分析名称', 
 // 新建
 const createOpen = ref(false)
 const sourceType = ref('project')
-const createForm = reactive({ projectName: '', keyword: '' })
+const createForm = reactive({ projectId: null, keyword: '' })
 const uploadFile = ref(null)
 const analyzing = ref(false)
 const projectTree = ref([])
 const topicOptions = ['自动检测', '预算', '收入', '支出', '收支结构', '采购', '合同', '资产', '整改', '风险分析', '执行率', '趋势分析', '财务报表']
 
 const canSubmit = computed(() => {
-  if (sourceType.value === 'project') return createForm.projectName?.trim() && createForm.keyword?.trim()
-  return uploadFile.value != null
+  if (sourceType.value === 'project') return createForm.projectId && createForm.keyword?.trim()
+  return uploadFile.value != null && createForm.projectId
 })
 
 function handleQuery() {
@@ -291,7 +291,7 @@ async function handleDelete(row) {
 
 function openCreateDialog(type) {
   sourceType.value = type
-  createForm.projectName = ''
+  createForm.projectId = null
   createForm.keyword = ''
   uploadFile.value = null
   createOpen.value = true
@@ -319,14 +319,14 @@ async function doAnalyze() {
     let res
     if (sourceType.value === 'project') {
       res = await analyzeProject({
-        projectName: createForm.projectName,
+        projectId: String(createForm.projectId),
         keyword: createForm.keyword === '自动检测' ? '自动分析' : createForm.keyword
       })
     } else {
       const formData = new FormData()
       formData.append('file', uploadFile.value)
       if (createForm.keyword) formData.append('keyword', createForm.keyword)
-      if (createForm.projectName) formData.append('projectName', createForm.projectName)
+      formData.append('projectId', String(createForm.projectId))
       res = await analyzeUpload(formData)
     }
     if (res.code === 200 && res.data) {

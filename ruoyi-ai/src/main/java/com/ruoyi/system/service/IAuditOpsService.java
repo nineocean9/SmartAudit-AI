@@ -8,7 +8,9 @@ import java.util.Map;
 public interface IAuditOpsService
 {
     List<Map<String,Object>> selectSchemeList(Long projectId);
+    Map<String,Object> selectSchemeById(Long id);
     int insertScheme(Map<String,Object> s);
+    int updateSchemeContent(Map<String,Object> s);
     List<AuditWorkpaper> selectWorkpaperList(AuditWorkpaper w);
     AuditWorkpaper selectWorkpaperById(Long id);
     int insertWorkpaper(AuditWorkpaper w);
@@ -19,5 +21,6 @@ public interface IAuditOpsService
     AuditReport selectReportById(Long id);
     int insertReport(AuditReport r);
     int updateReport(AuditReport r);
+    int updateReportContent(AuditReport r);
     List<Map<String,Object>> selectCollabLog(Long projectId);
 }

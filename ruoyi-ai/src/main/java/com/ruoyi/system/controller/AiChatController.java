@@ -17,6 +17,7 @@ import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.common.utils.SecurityUtils;
+import com.ruoyi.common.core.domain.model.LoginUser;
 import com.ruoyi.system.domain.AiConversation;
 import com.ruoyi.system.domain.AiMessage;
 import com.ruoyi.system.service.IAiChatService;
@@ -144,12 +145,13 @@ public class AiChatController extends BaseController
     @GetMapping(value = "/stream", produces = "text/event-stream;charset=UTF-8")
     @ResponseBody
     public SseEmitter stream(@RequestParam Long conversationId,
-                             @RequestParam String message)
+                             @RequestParam String message,
+                             @RequestParam(required = false) Long projectId,
+                             @RequestParam(defaultValue = "false") boolean resume)
     {
         SseEmitter emitter = new SseEmitter(0L);
-        Long userId = SecurityUtils.getUserId();
-        String username = SecurityUtils.getUsername();
-        new Thread(() -> aiChatService.chat(conversationId, message, userId, username, emitter)).start();
+        LoginUser loginUser = SecurityUtils.getLoginUser();
+        new Thread(() -> aiChatService.chat(conversationId, message, projectId, resume, loginUser, emitter)).start();
         return emitter;
     }
 }

@@ -2,6 +2,7 @@ package com.ruoyi.web.controller.common;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
@@ -12,6 +13,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.multipart.MultipartFile;
 import com.ruoyi.common.config.RuoYiConfig;
 import com.ruoyi.common.core.domain.AjaxResult;
@@ -92,6 +95,25 @@ public class CommonController
         {
             return AjaxResult.error(e.getMessage());
         }
+    }
+
+    /** 清理“文件上传成功但业务记录保存失败”产生的无主文件。 */
+    @PreAuthorize("isAuthenticated()")
+    @PostMapping("/upload/cleanup")
+    public AjaxResult cleanupUpload(@RequestBody Map<String, String> body) throws Exception
+    {
+        String resource = body.get("filePath");
+        if (resource == null || !resource.replace('\\', '/').startsWith("/profile/upload/"))
+        {
+            return AjaxResult.error("只能清理本次上传目录中的文件");
+        }
+        java.io.File uploadRoot = new java.io.File(RuoYiConfig.getUploadPath()).getCanonicalFile();
+        java.io.File target = new java.io.File(RuoYiConfig.getProfile() + FileUtils.stripPrefix(resource)).getCanonicalFile();
+        if (!target.toPath().startsWith(uploadRoot.toPath()))
+        {
+            return AjaxResult.error("非法文件路径");
+        }
+        return FileUtils.deleteFile(target.getPath()) ? AjaxResult.success() : AjaxResult.error("文件不存在或已清理");
     }
 
     /**

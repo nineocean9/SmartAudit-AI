@@ -6,6 +6,7 @@ import java.util.List;
 public interface AuditArchiveMapper
 {
     List<AuditArchive> selectByProjectId(Long projectId);
+    AuditArchive selectById(Long id);
     List<AuditArchive> selectList(AuditArchive q);
     int insert(AuditArchive a);
     int update(AuditArchive a);

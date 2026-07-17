@@ -4,18 +4,26 @@ import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.system.service.IAuditInfoService;
+import com.ruoyi.system.service.AuditProjectAccessService;
+import com.ruoyi.system.service.IProjectDocService;
+import com.ruoyi.common.utils.SecurityUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import java.util.Map;
+import java.util.List;
 
 @RestController
 @RequestMapping("/audit/info")
 public class AuditInfoController extends BaseController
 {
     @Autowired private IAuditInfoService service;
+    @Autowired private AuditProjectAccessService projectAccessService;
     @Autowired private com.ruoyi.system.mapper.AuditPlanAttachMapper attachMapper;
     @Autowired private com.ruoyi.system.mapper.AuditPlanChangeLogMapper changeLogMapper;
+    @Autowired private IProjectDocService projectDocService;
+    @Autowired private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     // 计划
     @PreAuthorize("@ss.hasPermi('audit:plan:view')")
@@ -45,7 +53,11 @@ public class AuditInfoController extends BaseController
     // 进度
     @PreAuthorize("@ss.hasPermi('audit:progress:view')")
     @GetMapping("/progress")
-    public AjaxResult progress() { return success(service.selectProjectProgress()); }
+    public AjaxResult progress() {
+        List<Map<String, Object>> list = service.selectProjectProgress();
+        list.removeIf(p -> !projectAccessService.canAccessProject(toLong(p.get("id"))));
+        return success(list);
+    }
 
     // ========== 闭环⓪ ==========
 
@@ -62,15 +74,28 @@ public class AuditInfoController extends BaseController
     // 计划-项目绑定
     @PreAuthorize("@ss.hasPermi('audit:plan:edit')")
     @PostMapping("/plan/{planId}/bind/{projectId}")
-    public AjaxResult bind(@PathVariable Long planId, @PathVariable Long projectId) { return toAjax(service.bindPlanProject(planId, projectId)); }
+    @Transactional
+    public AjaxResult bind(@PathVariable Long planId, @PathVariable Long projectId) {
+        int rows = service.bindPlanProject(planId, projectId);
+        if (rows > 0) for (com.ruoyi.system.domain.AuditPlanAttachment att : attachMapper.selectByPlanId(planId)) syncPlanAttachment(att, projectId);
+        return toAjax(rows);
+    }
     @PreAuthorize("@ss.hasPermi('audit:plan:edit')")
     @DeleteMapping("/plan/{planId}/bind/{projectId}")
-    public AjaxResult unbind(@PathVariable Long planId, @PathVariable Long projectId) { return toAjax(service.unbindPlanProject(planId, projectId)); }
+    @Transactional
+    public AjaxResult unbind(@PathVariable Long planId, @PathVariable Long projectId) {
+        for (com.ruoyi.system.domain.AuditPlanAttachment att : attachMapper.selectByPlanId(planId)) projectDocService.hideSyncedDocument(projectId, att.getFilePath());
+        return toAjax(service.unbindPlanProject(planId, projectId));
+    }
 
     // 计划下的项目和方案
     @PreAuthorize("@ss.hasPermi('audit:plan:view')")
     @GetMapping("/plan/{planId}/projects")
-    public AjaxResult planProjects(@PathVariable Long planId) { return success(service.selectPlanProjects(planId)); }
+    public AjaxResult planProjects(@PathVariable Long planId) {
+        List<Map<String, Object>> list = service.selectPlanProjects(planId);
+        list.removeIf(p -> !projectAccessService.canAccessProject(toLong(p.get("project_id"))));
+        return success(list);
+    }
     @PreAuthorize("@ss.hasPermi('audit:plan:view')")
     @GetMapping("/plan/{planId}/schemes")
     public AjaxResult planSchemes(@PathVariable Long planId) { return success(service.selectSchemeByPlan(planId)); }
@@ -95,11 +120,24 @@ public class AuditInfoController extends BaseController
 
     @PreAuthorize("@ss.hasPermi('audit:plan:edit')")
     @PostMapping("/plan/attachment")
-    public AjaxResult addAttachment(@RequestBody com.ruoyi.system.domain.AuditPlanAttachment att) { return toAjax(attachMapper.insert(att)); }
+    @Transactional
+    public AjaxResult addAttachment(@RequestBody com.ruoyi.system.domain.AuditPlanAttachment att) {
+        att.setCreateBy(SecurityUtils.getUsername());
+        int rows = attachMapper.insert(att);
+        if (rows > 0) for (Long projectId : linkedProjectIds(att.getPlanId())) syncPlanAttachment(att, projectId);
+        return toAjax(rows);
+    }
 
     @PreAuthorize("@ss.hasPermi('audit:plan:edit')")
     @DeleteMapping("/plan/attachment/{id}")
-    public AjaxResult delAttachment(@PathVariable Long id) { return toAjax(attachMapper.deleteById(id)); }
+    @Transactional
+    public AjaxResult delAttachment(@PathVariable Long id) {
+        com.ruoyi.system.domain.AuditPlanAttachment att = attachMapper.selectById(id);
+        if (att == null) return AjaxResult.error("计划附件不存在");
+        int rows = attachMapper.deleteById(id);
+        if (rows > 0) for (Long projectId : linkedProjectIds(att.getPlanId())) projectDocService.hideSyncedDocument(projectId, att.getFilePath());
+        return toAjax(rows);
+    }
 
     // === 计划更新（带变更日志） ===
     @PreAuthorize("@ss.hasPermi('audit:plan:edit')")
@@ -128,4 +166,27 @@ public class AuditInfoController extends BaseController
     @PreAuthorize("@ss.hasPermi('audit:leader:edit')")
     @DeleteMapping("/leader/{ids}")
     public AjaxResult delLeader(@PathVariable Long[] ids) { return toAjax(service.deleteLeaderByIds(ids)); }
+
+    private Long toLong(Object value)
+    {
+        if (value == null || value.toString().isBlank()) return null;
+        return Long.valueOf(value.toString());
+    }
+
+    private List<Long> linkedProjectIds(Long planId)
+    {
+        return jdbcTemplate.queryForList(
+                "SELECT DISTINCT project_id FROM (SELECT project_id FROM audit_plan_project WHERE plan_id=? UNION SELECT id FROM audit_project WHERE plan_id=?) p WHERE project_id IS NOT NULL",
+                Long.class, planId, planId);
+    }
+
+    private void syncPlanAttachment(com.ruoyi.system.domain.AuditPlanAttachment att, Long projectId)
+    {
+        if (att.getFilePath() == null || att.getFilePath().isBlank()) return;
+        String docType = att.getAttachmentType() == null || att.getAttachmentType().isBlank()
+                ? "审计计划附件" : "审计计划附件-" + att.getAttachmentType();
+        projectDocService.syncUploadedDocument(projectId, att.getPlanId(), docType,
+                att.getFileName(), att.getFilePath(), "审计计划附件：" + att.getFileName(),
+                SecurityUtils.getUsername(), true);
+    }
 }

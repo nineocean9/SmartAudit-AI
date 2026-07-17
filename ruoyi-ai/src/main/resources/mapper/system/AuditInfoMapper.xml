@@ -13,7 +13,8 @@
         <result property="description" column="description"/>
     </resultMap>
     <resultMap id="UnitResult" type="AuditUnit">
-        <id property="id" column="id" /><result property="unitName" column="unit_name" />
+        <id property="id" column="id" /><result property="deptId" column="dept_id" />
+        <result property="unitName" column="unit_name" />
         <result property="unitType" column="unit_type" /><result property="profile" column="profile" />
         <result property="historyAudit" column="history_audit" /><result property="createTime" column="create_time" />
         <result property="unitCode" column="unit_code"/>
@@ -57,12 +58,12 @@
         <where><if test="unitType!=null and unitType!=''">AND unit_type=#{unitType}</if></where>
         ORDER BY create_time DESC</select>
     <insert id="insertUnit" parameterType="AuditUnit" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO audit_unit(unit_name,unit_type,profile,history_audit,unit_code,parent_leader,staff_count,finance_contact,contact_phone,address,create_time)
-        VALUES(#{unitName},#{unitType},#{profile},#{historyAudit},#{unitCode},#{parentLeader},#{staffCount},#{financeContact},#{contactPhone},#{address},now())
+        INSERT INTO audit_unit(dept_id,unit_name,unit_type,profile,history_audit,unit_code,parent_leader,staff_count,finance_contact,contact_phone,address,create_time)
+        VALUES(#{deptId},#{unitName},#{unitType},#{profile},#{historyAudit},#{unitCode},#{parentLeader},#{staffCount},#{financeContact},#{contactPhone},#{address},now())
     </insert>
     <update id="updateUnit" parameterType="AuditUnit">UPDATE audit_unit SET unit_name=#{unitName},unit_type=#{unitType},profile=#{profile},history_audit=#{historyAudit},
         unit_code=#{unitCode},parent_leader=#{parentLeader},staff_count=#{staffCount},finance_contact=#{financeContact},
-        contact_phone=#{contactPhone},address=#{address} WHERE id=#{id}</update>
+        contact_phone=#{contactPhone},address=#{address},dept_id=#{deptId} WHERE id=#{id}</update>
     <delete id="deleteUnitByIds">DELETE FROM audit_unit WHERE id IN <foreach collection="array" item="id" open="(" separator="," close=")">#{id}</foreach></delete>
 
     <!-- 领导 -->
@@ -79,10 +80,70 @@
 
     <!-- 进度：各项目状态统计 -->
     <select id="selectProjectProgress" resultType="java.util.Map">
-        SELECT p.id,p.project_name,p.audited_unit,p.audit_type,p.audit_year,p.status,
+        WITH progress_metrics AS (
+            SELECT
+                p.id,
+                count(DISTINCT m.id) AS material_total,
+                count(DISTINCT CASE WHEN m.submit_status = 1 THEN m.id END) AS material_done,
+                count(DISTINCT w.id) AS workpaper_total,
+                count(DISTINCT CASE WHEN w.status &gt;= 2 THEN w.id END) AS workpaper_done,
+                count(DISTINCT i.id) AS issue_total,
+                count(DISTINCT CASE WHEN r.status = 2 THEN i.id END) AS rect_done,
+                max(CASE WHEN s.status = 1 THEN 1 ELSE 0 END) AS scheme_approved,
+                max(COALESCE(rep.status, -1)) AS report_status
+            FROM audit_project p
+            LEFT JOIN audit_material_checklist m ON m.project_id = p.id
+            LEFT JOIN audit_workpaper w ON w.project_id = p.id
+            LEFT JOIN audit_issue i ON i.project_id = p.id
+            LEFT JOIN audit_rectification r ON r.issue_id = i.id
+            LEFT JOIN audit_scheme s ON s.project_id = p.id
+            LEFT JOIN audit_report rep ON rep.project_id = p.id
+            GROUP BY p.id
+        )
+        SELECT p.id,p.project_name,p.audited_unit,p.dept_id,p.audit_type,p.audit_year,p.status,
+               COALESCE(p.start_date, make_date(p.audit_year, 1, 1)) AS start_date,
+               COALESCE(p.end_date, make_date(p.audit_year, 12, 31)) AS end_date,
+               CASE
+                   WHEN p.status = 2 THEN 100
+                   WHEN p.status = 0 AND COALESCE(p.start_date, make_date(p.audit_year, 1, 1)) &gt; CURRENT_DATE THEN 0
+                   ELSE LEAST(99, ROUND(
+                       10
+                       + CASE WHEN pm.scheme_approved = 1 THEN 15 ELSE 0 END
+                       + CASE WHEN pm.material_total &gt; 0 THEN 20.0 * pm.material_done / pm.material_total ELSE 0 END
+                       + CASE WHEN pm.workpaper_total &gt; 0 THEN 25.0 * pm.workpaper_done / pm.workpaper_total ELSE 0 END
+                       + CASE WHEN pm.issue_total &gt; 0 THEN 20.0 * pm.rect_done / pm.issue_total ELSE 0 END
+                       + CASE WHEN pm.report_status = 2 THEN 10 WHEN pm.report_status = 1 THEN 7 WHEN pm.report_status = 0 THEN 4 ELSE 0 END
+                   ))::int
+               END AS progress,
+               CASE
+                   WHEN p.status = 2 THEN '归档'
+                   WHEN pm.issue_total &gt; 0 AND pm.rect_done &lt; pm.issue_total THEN '整改跟踪'
+                   WHEN pm.report_status &gt;= 1 THEN '报告审核'
+                   WHEN pm.report_status = 0 THEN '报告编制'
+                   WHEN pm.workpaper_total &gt; 0 AND pm.workpaper_done &lt; pm.workpaper_total THEN '底稿复核'
+                   WHEN pm.workpaper_total &gt; 0 THEN '现场实施'
+                   WHEN pm.material_total &gt; 0 AND pm.material_done &lt; pm.material_total THEN '资料收集'
+                   WHEN pm.scheme_approved = 1 THEN '审计准备'
+                   ELSE '准备'
+               END AS phase,
+               CASE
+                   WHEN COALESCE(p.is_overdue, 0) = 1 THEN 1
+                   WHEN p.status &lt;&gt; 2 AND COALESCE(p.end_date, make_date(p.audit_year, 12, 31)) &lt; CURRENT_DATE THEN 1
+                   ELSE 0
+               END AS is_overdue,
                (SELECT count(*) FROM audit_issue WHERE project_id=p.id) AS issue_count,
-               (SELECT count(*) FROM audit_issue i JOIN audit_rectification r ON r.issue_id=i.id WHERE i.project_id=p.id AND r.status=2) AS rect_count
-        FROM audit_project p ORDER BY p.audit_year DESC, p.status ASC
+               (SELECT count(*) FROM audit_issue i JOIN audit_rectification r ON r.issue_id=i.id WHERE i.project_id=p.id AND r.status=2) AS rect_count,
+               pm.scheme_approved,
+               pm.material_done,
+               pm.material_total,
+               pm.workpaper_done,
+               pm.workpaper_total,
+               pm.rect_done,
+               pm.issue_total,
+               pm.report_status
+        FROM audit_project p
+        JOIN progress_metrics pm ON pm.id = p.id
+        ORDER BY p.audit_year DESC, p.status ASC
     </select>
 
     <!-- 推荐应审单位：近2年未审计的 -->
@@ -91,7 +152,7 @@
         FROM audit_unit u
         WHERE u.id NOT IN (
             SELECT u2.id FROM audit_unit u2
-            JOIN audit_project p ON p.audited_unit = u2.unit_name
+            JOIN audit_project p ON p.dept_id = u2.dept_id OR (p.dept_id IS NULL AND p.audited_unit = u2.unit_name)
             WHERE p.audit_year >= EXTRACT(YEAR FROM now()) - 1
         )
         ORDER BY u.unit_name
@@ -116,7 +177,9 @@
     </select>
     <select id="selectUnitProjects" resultType="java.util.Map">
         SELECT id,project_name,audit_type,audit_year,status
-        FROM audit_project WHERE audited_unit = (SELECT unit_name FROM audit_unit WHERE id=#{unitId})
+        FROM audit_project
+        WHERE dept_id = (SELECT dept_id FROM audit_unit WHERE id=#{unitId})
+           OR (dept_id IS NULL AND audited_unit = (SELECT unit_name FROM audit_unit WHERE id=#{unitId}))
         ORDER BY audit_year DESC
     </select>
 
@@ -127,7 +190,7 @@
     </insert>
     <delete id="unbindPlanProject">DELETE FROM audit_plan_project WHERE plan_id=#{planId} AND project_id=#{projectId}</delete>
     <select id="selectPlanProjects" resultType="java.util.Map">
-        SELECT pp.project_id, p.project_name, p.audited_unit, p.audit_type, p.audit_year, p.status, pp.bind_time
+        SELECT pp.project_id, p.project_name, p.audited_unit, p.dept_id, p.audit_type, p.audit_year, p.status, pp.bind_time
         FROM audit_plan_project pp JOIN audit_project p ON p.id=pp.project_id
         WHERE pp.plan_id=#{planId} ORDER BY pp.bind_time DESC
     </select>

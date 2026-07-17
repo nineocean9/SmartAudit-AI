@@ -56,7 +56,7 @@ public class AuditBasis extends BaseEntity
     private Date expireDate;
 
     /** 层级 */
-    private Integer hierarchyLevel;
+    private String hierarchyLevel;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -84,6 +84,6 @@ public class AuditBasis extends BaseEntity
     public void setFundType(String fundType) { this.fundType = fundType; }
     public Date getExpireDate() { return expireDate; }
     public void setExpireDate(Date expireDate) { this.expireDate = expireDate; }
-    public Integer getHierarchyLevel() { return hierarchyLevel; }
-    public void setHierarchyLevel(Integer hierarchyLevel) { this.hierarchyLevel = hierarchyLevel; }
+    public String getHierarchyLevel() { return hierarchyLevel; }
+    public void setHierarchyLevel(String hierarchyLevel) { this.hierarchyLevel = hierarchyLevel; }
 }

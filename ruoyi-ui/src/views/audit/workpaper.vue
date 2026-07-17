@@ -113,8 +113,8 @@
         <el-form-item label="级别">
           <el-select v-model="rf.level" style="width:100%">
             <el-option label="主审" value="主审" />
-            <el-option label="组长" value="组长" />
-            <el-option label="负责人" value="负责人" />
+            <el-option label="项目组长" value="项目组长" />
+            <el-option label="审计处长" value="审计处长" />
           </el-select>
         </el-form-item>
         <el-form-item label="意见">
@@ -137,11 +137,13 @@
 
 <script setup>
 import { ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { ops } from '@/api/audit/auditOps'
-import { getProgress } from '@/api/audit/auditInfo'
+import { listProjectTree } from '@/api/ai/workspace'
 import { ElMessage } from 'element-plus'
 import { Document } from '@element-plus/icons-vue'
 
+const route = useRoute()
 const projects = ref([])
 const q = ref({ pageNum: 1, pageSize: 10 })
 const list = ref([])
@@ -155,7 +157,24 @@ const f = ref({ category: '底稿' })
 const dlgReview = ref(false)
 const rf = ref({ level: '主审', opinion: '', status: 1 })
 
-getProgress().then(r => { projects.value = r.data || [] })
+async function loadProjects() {
+  try {
+    const r = await listProjectTree()
+    projects.value = (r.data || []).flatMap(plan => (plan.projects || []).map(project => ({
+      id: project.id,
+      project_name: project.projectName,
+      audited_unit: project.auditedUnit,
+      audit_type: project.auditType,
+      audit_year: project.auditYear
+    })))
+    const routeProjectId = Number(route.query.projectId || route.query.id)
+    if (routeProjectId) q.value.projectId = routeProjectId
+  } catch (e) {
+    ElMessage.error('项目列表加载失败')
+  } finally {
+    getList()
+  }
+}
 
 function getList() {
   loading.value = true
@@ -164,7 +183,7 @@ function getList() {
 
 function viewDetail(row) {
   ops.wpInfo(row.id || row).then(r => { detail.value = r.data || {} })
-  ops.reviewList(row.id || row).then(r => { reviews.value = r.data || [] })
+  ops.reviewList(row.id || row).then(r => { reviews.value = r.data || [] }).catch(() => { reviews.value = [] })
   viewingWp.value = true
 }
 
@@ -175,7 +194,7 @@ function formatText(text) {
     .replace(/\n/g, '<br>')
 }
 
-function openAdd() { f.value = { category: '底稿' }; dlgAdd.value = true }
+function openAdd() { f.value = { category: '底稿', projectId: q.value.projectId }; dlgAdd.value = true }
 function submitAdd() {
   ops.addWp(f.value).then(r => {
     if (r.code === 200) { ElMessage.success('创建成功'); dlgAdd.value = false; getList() }
@@ -191,7 +210,7 @@ function submitReview() {
   })
 }
 
-getList()
+loadProjects()
 </script>
 
 <style scoped>

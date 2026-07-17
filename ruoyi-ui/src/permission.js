@@ -9,6 +9,7 @@ import useUserStore from '@/store/modules/user'
 import useLockStore from '@/store/modules/lock'
 import useSettingsStore from '@/store/modules/settings'
 import usePermissionStore from '@/store/modules/permission'
+import auth from '@/plugins/auth'
 
 NProgress.configure({ showSpinner: false })
 
@@ -16,6 +17,19 @@ const whiteList = ['/login', '/register']
 
 const isWhiteList = (path) => {
   return whiteList.some(pattern => isPathMatch(pattern, path))
+}
+
+const hasRouteAccess = (to) => {
+  const matchedRoutes = to.matched || []
+  const needPerms = matchedRoutes.flatMap(route => route.permissions || route.meta?.permissions || [])
+  const needRoles = matchedRoutes.flatMap(route => route.roles || route.meta?.roles || [])
+  const accessModeAny = matchedRoutes.some(route => route.accessMode === 'any' || route.meta?.accessMode === 'any')
+  const hasPerms = needPerms.length === 0 || auth.hasPermiOr(needPerms)
+  const hasRoles = needRoles.length === 0 || auth.hasRoleOr(needRoles)
+  if (accessModeAny && needPerms.length > 0 && needRoles.length > 0) {
+    return hasPerms || hasRoles
+  }
+  return hasPerms && hasRoles
 }
 
 router.beforeEach((to, from, next) => {
@@ -57,7 +71,12 @@ router.beforeEach((to, from, next) => {
           })
         })
       } else {
-        next()
+        if (hasRouteAccess(to)) {
+          next()
+        } else {
+          next({ path: '/401', replace: true })
+          NProgress.done()
+        }
       }
     }
   } else {

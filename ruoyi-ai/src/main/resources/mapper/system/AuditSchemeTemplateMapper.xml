@@ -4,6 +4,7 @@
     <resultMap id="Result" type="AuditSchemeTemplate">
         <id property="id" column="id"/><result property="templateName" column="template_name"/>
         <result property="auditType" column="audit_type"/><result property="content" column="content"/>
+        <result property="fileUrl" column="file_url"/>
         <result property="status" column="status"/><result property="createBy" column="create_by"/>
         <result property="createTime" column="create_time"/><result property="updateTime" column="update_time"/>
     </resultMap>
@@ -13,8 +14,9 @@
     <select id="selectById" resultMap="Result">SELECT * FROM audit_scheme_template WHERE id=#{id}</select>
     <select id="selectByAuditType" resultMap="Result">SELECT * FROM audit_scheme_template WHERE audit_type=#{auditType} AND status=1 ORDER BY create_time DESC</select>
     <insert id="insert" parameterType="AuditSchemeTemplate" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO audit_scheme_template(template_name,audit_type,content,status,create_by,create_time)
-        VALUES(#{templateName},#{auditType},#{content},#{status},#{createBy},now())</insert>
-    <update id="update" parameterType="AuditSchemeTemplate">UPDATE audit_scheme_template SET template_name=#{templateName},audit_type=#{auditType},content=#{content},status=#{status},update_time=now() WHERE id=#{id}</update>
+        INSERT INTO audit_scheme_template(template_name,audit_type,content,file_url,status,create_by,create_time)
+        VALUES(#{templateName},#{auditType},#{content},#{fileUrl},#{status},#{createBy},now())</insert>
+    <update id="update" parameterType="AuditSchemeTemplate">UPDATE audit_scheme_template SET template_name=#{templateName},audit_type=#{auditType},content=#{content},file_url=#{fileUrl},status=#{status},update_time=now() WHERE id=#{id}</update>
+    <update id="updateContent">UPDATE audit_scheme_template SET content=#{content},update_time=now() WHERE id=#{id}</update>
     <delete id="deleteByIds">DELETE FROM audit_scheme_template WHERE id IN <foreach collection="array" item="id" open="(" separator="," close=")">#{id}</foreach></delete>
 </mapper>

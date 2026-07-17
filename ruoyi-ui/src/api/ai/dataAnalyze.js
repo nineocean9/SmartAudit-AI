@@ -15,6 +15,14 @@ export function getAnalysisResult(id) {
   })
 }
 
+export function getAnalysisHtml(id) {
+  return request({
+    url: `/ai/data/analysis/${id}/html`,
+    method: 'get',
+    responseType: 'blob'
+  })
+}
+
 export function deleteAnalysis(ids) {
   return request({
     url: `/ai/data/analysis/${ids}`,

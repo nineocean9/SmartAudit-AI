@@ -8,12 +8,10 @@
       </transition>
     </router-view>
     <iframe-toggle />
-    <copyright />
   </section>
 </template>
 
 <script setup>
-import copyright from "./Copyright/index"
 import iframeToggle from "./IframeToggle/index"
 import useTagsViewStore from '@/store/modules/tagsView'
 
@@ -49,10 +47,6 @@ function addIframe() {
   scrollbar-gutter: auto;
   height: calc(100vh - 50px);
   min-height: 0px;
-}
-
-.app-main:has(.copyright) {
-  padding-bottom: 36px;
 }
 
 .fixed-header + .app-main {

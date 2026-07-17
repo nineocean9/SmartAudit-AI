@@ -51,6 +51,18 @@ public class SysDept extends BaseEntity
 
     /** 父部门名称 */
     private String parentName;
+
+    /** Audit business unit type. */
+    private String unitType;
+
+    /** Audit business profile. */
+    private String profile;
+
+    /** Historical audit summary. */
+    private String historyAudit;
+
+    /** Whether this department can be selected as an audit target. */
+    private Integer isAuditTarget;
     
     /** 子部门 */
     private List<SysDept> children = new ArrayList<SysDept>();
@@ -171,6 +183,46 @@ public class SysDept extends BaseEntity
         this.parentName = parentName;
     }
 
+    public String getUnitType()
+    {
+        return unitType;
+    }
+
+    public void setUnitType(String unitType)
+    {
+        this.unitType = unitType;
+    }
+
+    public String getProfile()
+    {
+        return profile;
+    }
+
+    public void setProfile(String profile)
+    {
+        this.profile = profile;
+    }
+
+    public String getHistoryAudit()
+    {
+        return historyAudit;
+    }
+
+    public void setHistoryAudit(String historyAudit)
+    {
+        this.historyAudit = historyAudit;
+    }
+
+    public Integer getIsAuditTarget()
+    {
+        return isAuditTarget;
+    }
+
+    public void setIsAuditTarget(Integer isAuditTarget)
+    {
+        this.isAuditTarget = isAuditTarget;
+    }
+
     public List<SysDept> getChildren()
     {
         return children;
@@ -194,6 +246,8 @@ public class SysDept extends BaseEntity
             .append("email", getEmail())
             .append("status", getStatus())
             .append("delFlag", getDelFlag())
+            .append("unitType", getUnitType())
+            .append("isAuditTarget", getIsAuditTarget())
             .append("createBy", getCreateBy())
             .append("createTime", getCreateTime())
             .append("updateBy", getUpdateBy())

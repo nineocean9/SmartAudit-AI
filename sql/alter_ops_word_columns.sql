@@ -1,0 +1,7 @@
+-- 为审计准备/审计报告 Word 流程补齐字段
+ALTER TABLE audit_scheme ADD COLUMN IF NOT EXISTS title VARCHAR(200);
+ALTER TABLE audit_scheme ADD COLUMN IF NOT EXISTS file_url VARCHAR(500);
+ALTER TABLE audit_scheme ADD COLUMN IF NOT EXISTS update_time TIMESTAMP;
+
+ALTER TABLE audit_report ADD COLUMN IF NOT EXISTS title VARCHAR(200);
+ALTER TABLE audit_report ADD COLUMN IF NOT EXISTS file_url VARCHAR(500);

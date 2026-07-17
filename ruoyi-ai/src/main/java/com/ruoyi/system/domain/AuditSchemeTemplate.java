@@ -16,6 +16,7 @@ public class AuditSchemeTemplate extends BaseEntity
     private String templateName;
     private String auditType;
     private String content;
+    private String fileUrl;
     private Integer status;
 
     public Long getId() { return id; }
@@ -26,6 +27,8 @@ public class AuditSchemeTemplate extends BaseEntity
     public void setAuditType(String v) { this.auditType = v; }
     public String getContent() { return content; }
     public void setContent(String v) { this.content = v; }
+    public String getFileUrl() { return fileUrl; }
+    public void setFileUrl(String v) { this.fileUrl = v; }
     public Integer getStatus() { return status; }
     public void setStatus(Integer v) { this.status = v; }
 }

@@ -89,6 +89,10 @@ public class CaptchaController
 
         ajax.put("uuid", uuid);
         ajax.put("img", Base64.encode(os.toByteArray()));
+        if (RuoYiConfig.isDemoCaptchaEnabled())
+        {
+            ajax.put("demoCode", code);
+        }
         return ajax;
     }
 }

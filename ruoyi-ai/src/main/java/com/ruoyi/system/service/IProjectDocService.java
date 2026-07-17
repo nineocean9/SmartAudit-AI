@@ -42,6 +42,13 @@ public interface IProjectDocService
     ProjectDocument uploadDocument(Long projectId, Long planId, String docType,
                                    MultipartFile file, String createBy);
 
+    /** 将其他业务页面已经上传的文件登记或更新到项目库。 */
+    ProjectDocument syncUploadedDocument(Long projectId, Long planId, String docType,
+                                         String fileName, String filePath, String contentText,
+                                         String createBy, boolean visible);
+
+    int hideSyncedDocument(Long projectId, String filePath);
+
     /**
      * 根据ID获取文档（含 filePath，用于下载）
      */
@@ -66,6 +73,9 @@ public interface IProjectDocService
      * 获取文档纯文本内容
      */
     String getDocumentContent(Long docId);
+
+    /** 将在线编辑内容写回原 DOCX 文件。 */
+    void saveDocx(Long docId, String htmlContent) throws java.io.IOException;
 
     /**
      * 获取项目下所有文档的合并文本（用于数据分析）

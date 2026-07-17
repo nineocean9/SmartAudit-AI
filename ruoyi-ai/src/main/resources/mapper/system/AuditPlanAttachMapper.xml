@@ -9,6 +9,7 @@
         <result property="createBy" column="create_by"/><result property="createTime" column="create_time"/>
     </resultMap>
     <select id="selectByPlanId" resultMap="Result">SELECT * FROM audit_plan_attachment WHERE plan_id=#{planId} ORDER BY create_time DESC</select>
+    <select id="selectById" resultMap="Result">SELECT * FROM audit_plan_attachment WHERE id=#{id}</select>
     <insert id="insert" parameterType="AuditPlanAttachment" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO audit_plan_attachment(plan_id,file_name,file_path,file_type,file_size,attachment_type,create_by,create_time)
         VALUES(#{planId},#{fileName},#{filePath},#{fileType},#{fileSize},#{attachmentType},#{createBy},now())

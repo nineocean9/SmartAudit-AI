@@ -4,6 +4,7 @@ import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.system.mapper.AuditInfoMapper;
 import com.ruoyi.system.mapper.AuditProjectMemberMapper;
+import com.ruoyi.system.service.AuditProjectAccessService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -15,11 +16,13 @@ public class AuditProgressController extends BaseController
 {
     @Autowired private AuditInfoMapper infoMapper;
     @Autowired private AuditProjectMemberMapper memberMapper;
+    @Autowired private AuditProjectAccessService projectAccessService;
 
     @PreAuthorize("@ss.hasPermi('audit:progress:view')")
     @GetMapping("/gantt")
     public AjaxResult ganttData() {
         List<Map<String, Object>> projects = infoMapper.selectProjectProgress();
+        projects.removeIf(p -> !projectAccessService.canAccessProject(toLong(p.get("id"))));
         return success(projects);
     }
 
@@ -33,6 +36,7 @@ public class AuditProgressController extends BaseController
     @GetMapping("/overdue")
     public AjaxResult overdue() {
         List<Map<String, Object>> all = infoMapper.selectProjectProgress();
+        all.removeIf(p -> !projectAccessService.canAccessProject(toLong(p.get("id"))));
         List<Map<String, Object>> overdue = new ArrayList<>();
         for (Map<String, Object> p : all) {
             Object status = p.get("status");
@@ -44,5 +48,11 @@ public class AuditProgressController extends BaseController
             }
         }
         return success(overdue);
+    }
+
+    private Long toLong(Object value)
+    {
+        if (value == null || value.toString().isBlank()) return null;
+        return Long.valueOf(value.toString());
     }
 }

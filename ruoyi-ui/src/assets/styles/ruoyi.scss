@@ -379,6 +379,57 @@
   color: #ed5565;
 }
 
+/** 审计平台统一视觉微调 **/
+.app-main {
+  background: #f3f6f9;
+}
+
+.app-container {
+  background: #f3f6f9;
+}
+
+.el-card {
+  border-color: #dce4ec !important;
+  border-radius: 6px !important;
+  box-shadow: 0 8px 20px rgba(31, 41, 55, 0.04) !important;
+}
+
+.el-card__header {
+  color: #12263a;
+  background: #fbfcfd;
+  border-bottom: 1px solid #e5ebf1;
+  font-weight: 700;
+}
+
+.el-table {
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.el-table .el-table__header-wrapper th,
+.el-table .el-table__fixed-header-wrapper th {
+  background-color: #f1f5f8 !important;
+  color: #314256 !important;
+  font-weight: 700;
+}
+
+.el-button {
+  border-radius: 4px;
+}
+
+.el-button--primary {
+  --el-button-bg-color: #176b87;
+  --el-button-border-color: #176b87;
+  --el-button-hover-bg-color: #1f7f9f;
+  --el-button-hover-border-color: #1f7f9f;
+  --el-button-active-bg-color: #12566d;
+  --el-button-active-border-color: #12566d;
+}
+
+.el-dialog {
+  border-radius: 6px !important;
+}
+
 .text-muted {
   color: #888888;
 }

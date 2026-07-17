@@ -22,6 +22,9 @@ public class AuditMaterialChecklist extends BaseEntity
     private Integer submitStatus;
     private String filePath;
     private String submitBy;
+    private String submitByName;
+    private String submitByDept;
+    private String submitByRole;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private Date submitTime;
@@ -44,6 +47,12 @@ public class AuditMaterialChecklist extends BaseEntity
     public void setFilePath(String v) { this.filePath = v; }
     public String getSubmitBy() { return submitBy; }
     public void setSubmitBy(String v) { this.submitBy = v; }
+    public String getSubmitByName() { return submitByName; }
+    public void setSubmitByName(String v) { this.submitByName = v; }
+    public String getSubmitByDept() { return submitByDept; }
+    public void setSubmitByDept(String v) { this.submitByDept = v; }
+    public String getSubmitByRole() { return submitByRole; }
+    public void setSubmitByRole(String v) { this.submitByRole = v; }
     public Date getSubmitTime() { return submitTime; }
     public void setSubmitTime(Date v) { this.submitTime = v; }
     public String getSource() { return source; }

@@ -27,13 +27,38 @@
                                      file_size, file_ext, content_text, status, chunk_count,
                                      create_by, create_time, update_time)
         VALUES (#{projectId}, #{planId}, #{docType}, #{fileName}, #{filePath},
-                #{fileSize}, #{fileExt}, #{contentText}, 1, 0,
+                #{fileSize}, #{fileExt}, #{contentText}, COALESCE(#{status}, 1), 0,
                 #{createBy}, now(), now())
     </insert>
 
     <select id="selectById" resultMap="DocumentResult">
         SELECT * FROM project_document WHERE id = #{id} AND status = 1
     </select>
+
+    <select id="selectByBusinessKey" resultMap="DocumentResult">
+        SELECT * FROM project_document
+        WHERE project_id = #{projectId} AND doc_type = #{docType} AND file_name = #{fileName}
+        ORDER BY id DESC LIMIT 1
+    </select>
+
+    <select id="selectByProjectAndPath" resultMap="DocumentResult">
+        SELECT * FROM project_document
+        WHERE project_id = #{projectId} AND file_path = #{filePath}
+        ORDER BY id DESC LIMIT 1
+    </select>
+
+    <update id="updateSyncedDocument" parameterType="com.ruoyi.system.domain.ProjectDocument">
+        UPDATE project_document
+        SET plan_id = #{planId}, file_path = #{filePath}, file_size = #{fileSize},
+            file_ext = #{fileExt}, content_text = #{contentText}, status = #{status},
+            create_by = #{createBy}, update_time = now()
+        WHERE id = #{id}
+    </update>
+
+    <update id="hideByProjectAndPath">
+        UPDATE project_document SET status = 0, update_time = now()
+        WHERE project_id = #{projectId} AND file_path = #{filePath}
+    </update>
 
     <select id="selectByProjectId" resultMap="DocumentResult">
         SELECT * FROM project_document

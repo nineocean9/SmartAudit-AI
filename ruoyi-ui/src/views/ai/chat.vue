@@ -110,6 +110,20 @@
         <el-button type="primary" :disabled="!renameTitle.trim()" @click="submitRename">确 认</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="projectDialogVisible" title="请选择要继续处理的项目" width="560px" :close-on-click-modal="false">
+      <p class="project-dialog-tip">没有匹配到“{{ pendingProjectRequest?.projectName || '输入内容中的项目' }}”，请选择权限范围内的项目继续。</p>
+      <el-select v-model="selectedProjectId" filterable placeholder="搜索项目名称或被审计单位" style="width: 100%">
+        <el-option v-for="project in accessibleProjects" :key="project.id" :value="project.id" :label="project.projectName">
+          <span>{{ project.projectName }}</span>
+          <span class="project-option-unit">{{ project.auditedUnit || '' }}</span>
+        </el-option>
+      </el-select>
+      <template #footer>
+        <el-button @click="cancelProjectSelection">取消</el-button>
+        <el-button type="primary" :disabled="!selectedProjectId" @click="continueWithProject">继续执行</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -120,6 +134,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { EditPen, ChatDotRound, Edit, Delete, Loading, Warning, MagicStick, Cpu, Document, DataAnalysis, CircleCheck as Checked } from '@element-plus/icons-vue'
 import { getToken } from '@/utils/auth'
 import { listConversations, createConversation, renameConversation, deleteConversation, listMessages } from '@/api/ai/chat'
+import { listProjectTree } from '@/api/ai/workspace'
 
 const conversations = ref([])
 const loadingConvs = ref(false)
@@ -133,6 +148,10 @@ const isStreaming = ref(false)
 const renameDialogVisible = ref(false)
 const renameTitle = ref('')
 const renameTargetId = ref(null)
+const projectDialogVisible = ref(false)
+const pendingProjectRequest = ref(null)
+const accessibleProjects = ref([])
+const selectedProjectId = ref(null)
 
 let currentReader = null
 let sseEventBuffer = null
@@ -269,15 +288,23 @@ async function handleSendMessage() {
   if (!text) return
 
   inputText.value = ''
+  return streamMessage(text)
+}
+
+async function streamMessage(text, options = {}) {
+  const { appendUser = true, projectId = null } = options
   isStreaming.value = true
 
-  messages.value.push({ role: 'user', content: text, loading: false, streaming: false, error: null, dashboardIds: [] })
+  if (appendUser) {
+    messages.value.push({ role: 'user', content: text, loading: false, streaming: false, error: null, dashboardIds: [] })
+  }
   const aiIndex = messages.value.length
   messages.value.push({ role: 'assistant', content: '', loading: true, streaming: false, error: null, dashboardIds: [] })
   nextTick(() => scrollToBottom())
 
   const baseUrl = import.meta.env.VITE_APP_BASE_API || ''
-  const url = `${baseUrl}/ai/chat/stream?conversationId=${currentConvId.value}&message=${encodeURIComponent(text)}`
+  let url = `${baseUrl}/ai/chat/stream?conversationId=${currentConvId.value}&message=${encodeURIComponent(text)}`
+  if (projectId) url += `&projectId=${encodeURIComponent(projectId)}&resume=true`
   const token = getToken()
 
   try {
@@ -330,7 +357,13 @@ async function handleSendMessage() {
             isStreaming.value = false
             currentReader = null
             loadConvList()
+            if (pendingProjectRequest.value) await showProjectSelector()
             return
+          } else if (event === 'project_required') {
+            const payload = JSON.parse(data)
+            pendingProjectRequest.value = payload
+            const cur = messages.value[aiIndex]
+            messages.value[aiIndex] = { ...cur, content: '未找到匹配项目，请从项目库中选择一个项目继续。' }
           } else if (event === 'error') {
             throw new Error(data || 'AI 服务异常')
           }
@@ -346,6 +379,42 @@ async function handleSendMessage() {
     currentReader = null
     nextTick(() => focusInput())
   }
+}
+
+async function showProjectSelector() {
+  try {
+    const res = await listProjectTree()
+    const projects = []
+    ;(res.data || []).forEach(plan => {
+      ;(plan.projects || []).forEach(project => projects.push(project))
+    })
+    accessibleProjects.value = projects
+    selectedProjectId.value = null
+    if (!projects.length) {
+      ElMessage.warning('当前账号没有可访问的项目')
+      pendingProjectRequest.value = null
+      return
+    }
+    projectDialogVisible.value = true
+  } catch {
+    ElMessage.error('加载可访问项目失败')
+  }
+}
+
+function cancelProjectSelection() {
+  projectDialogVisible.value = false
+  pendingProjectRequest.value = null
+  selectedProjectId.value = null
+}
+
+function continueWithProject() {
+  const pending = pendingProjectRequest.value
+  const projectId = selectedProjectId.value
+  if (!pending || !projectId) return
+  projectDialogVisible.value = false
+  pendingProjectRequest.value = null
+  selectedProjectId.value = null
+  streamMessage(pending.originalMessage, { appendUser: false, projectId })
 }
 
 function abortStream() {
@@ -582,8 +651,93 @@ function focusInput() {
 .btn-send:active:not(:disabled) { transform: scale(0.91) !important; }
 .btn-send:disabled { background: #c0c4cc !important; border-color: #c0c4cc !important; cursor: not-allowed !important; }
 .input-hint { max-width: 812px; margin: 5px auto 0; font-size: 11px; color: #c0c4cc; text-align: center; }
+.project-dialog-tip { margin: 0 0 16px; color: #606266; line-height: 1.6; }
+.project-option-unit { float: right; margin-left: 16px; color: #909399; font-size: 12px; }
 
 .conv-list::-webkit-scrollbar, .messages-area::-webkit-scrollbar { width: 4px; }
 .conv-list::-webkit-scrollbar-track, .messages-area::-webkit-scrollbar-track { background: transparent; }
 .conv-list::-webkit-scrollbar-thumb, .messages-area::-webkit-scrollbar-thumb { background: #e4e7ed; border-radius: 4px; }
+
+@media (max-width: 768px) {
+  .ai-chat-wrapper {
+    height: calc(100dvh - 50px);
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+    min-width: 0;
+    height: 58px;
+    min-height: 58px;
+    flex-direction: row;
+    border-right: 0;
+    border-bottom: 1px solid #ebeef5;
+  }
+
+  .sidebar-header {
+    width: 92px;
+    padding: 9px 6px;
+    border-bottom: 0;
+  }
+
+  .btn-new-chat {
+    height: 38px !important;
+    padding: 0 8px !important;
+  }
+
+  .conv-list {
+    display: flex;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 9px 6px;
+  }
+
+  .conv-list > div { display: flex; gap: 6px; }
+
+  .conv-item {
+    width: 128px;
+    min-width: 128px;
+    height: 38px;
+  }
+
+  .conv-actions,
+  .conv-item:hover .conv-actions,
+  .conv-item.active .conv-actions { display: none; }
+
+  .welcome-screen { padding: 20px; }
+
+  .welcome-glow,
+  .welcome-tips,
+  .input-hint { display: none; }
+
+  .messages-area { padding: 8px 0; }
+
+  .msg-row {
+    padding: 5px 8px;
+    gap: 7px;
+  }
+
+  .msg-body { max-width: calc(100% - 38px); }
+
+  .avatar {
+    width: 28px;
+    height: 28px;
+  }
+
+  .bubble {
+    padding: 9px 11px;
+    font-size: 13px;
+  }
+
+  .input-area {
+    padding: 7px 8px calc(8px + env(safe-area-inset-bottom));
+  }
+
+  .shortcut-bar {
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .shortcut-btn { flex: 0 0 auto; }
+}
 </style>

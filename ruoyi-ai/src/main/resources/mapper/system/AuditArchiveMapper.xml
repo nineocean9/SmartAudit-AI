@@ -11,6 +11,7 @@
         <result property="createTime" column="create_time"/><result property="projectName" column="project_name"/>
     </resultMap>
     <select id="selectByProjectId" resultMap="Result">SELECT a.*,p.project_name FROM audit_archive a JOIN audit_project p ON p.id=a.project_id WHERE a.project_id=#{projectId} ORDER BY a.archive_category,a.sort_order</select>
+    <select id="selectById" resultMap="Result">SELECT * FROM audit_archive WHERE id=#{id}</select>
     <select id="selectList" resultMap="Result">SELECT a.*,p.project_name FROM audit_archive a JOIN audit_project p ON p.id=a.project_id
         <where><if test="projectId!=null">AND a.project_id=#{projectId}</if><if test="archiveStatus!=null">AND a.archive_status=#{archiveStatus}</if></where>
         ORDER BY a.create_time DESC</select>

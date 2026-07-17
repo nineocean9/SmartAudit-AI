@@ -30,6 +30,9 @@ public class RuoYiConfig
     /** 验证码类型 */
     private static String captchaType;
 
+    /** 是否返回演示验证码明文 */
+    private static boolean demoCaptchaEnabled;
+
     public String getName()
     {
         return name;
@@ -86,6 +89,16 @@ public class RuoYiConfig
 
     public void setCaptchaType(String captchaType) {
         RuoYiConfig.captchaType = captchaType;
+    }
+
+    public static boolean isDemoCaptchaEnabled()
+    {
+        return demoCaptchaEnabled;
+    }
+
+    public void setDemoCaptchaEnabled(boolean demoCaptchaEnabled)
+    {
+        RuoYiConfig.demoCaptchaEnabled = demoCaptchaEnabled;
     }
 
     /**

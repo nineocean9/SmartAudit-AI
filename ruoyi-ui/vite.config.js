@@ -1,19 +1,48 @@
 import { defineConfig, loadEnv } from 'vite'
 import path from 'path'
+import os from 'os'
 import createVitePlugins from './vite/plugins'
 
 const baseUrl = 'http://localhost:8080' // 后端接口
+
+function getLanUrls(port) {
+  const interfaces = os.networkInterfaces()
+  return Object.values(interfaces)
+    .flat()
+    .filter((item) => item && item.family === 'IPv4' && !item.internal)
+    .map((item) => `http://${item.address}:${port}`)
+}
+
+function mobileAccessTip(port) {
+  return {
+    name: 'mobile-access-tip',
+    configureServer(server) {
+      server.httpServer?.once('listening', () => {
+        const urls = getLanUrls(port)
+        if (urls.length) {
+          console.log('\n  Mobile web access:')
+          urls.forEach((url) => console.log(`  ${url}`))
+          console.log('  Make sure the phone and this computer are on the same LAN.\n')
+        }
+      })
+    }
+  }
+}
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode, command }) => {
   const env = loadEnv(mode, process.cwd())
   const { VITE_APP_ENV } = env
+  const port = Number(env.VITE_DEV_SERVER_PORT) || 80
   return {
     // 部署生产环境和开发环境下的URL。
     // 默认情况下，vite 会假设你的应用是被部署在一个域名的根路径上
     // 例如 https://www.ruoyi.vip/。如果应用被部署在一个子路径上，你就需要用这个选项指定这个子路径。例如，如果你的应用被部署在 https://www.ruoyi.vip/admin/，则设置 baseUrl 为 /admin/。
     base: VITE_APP_ENV === 'production' ? '/' : '/',
-    plugins: createVitePlugins(env, command === 'build'),
+    plugins: [
+      ...createVitePlugins(env, command === 'build'),
+      command === 'serve' && mobileAccessTip(port)
+    ].filter(Boolean),
     resolve: {
       // https://cn.vitejs.dev/config/#resolve-alias
       alias: {
@@ -42,8 +71,8 @@ export default defineConfig(({ mode, command }) => {
     },
     // vite 相关配置
     server: {
-      port: 80,
-      host: true,
+      port,
+      host: '0.0.0.0',
       open: true,
       proxy: {
         // https://cn.vitejs.dev/config/#server-proxy

@@ -167,7 +167,7 @@
             <el-link type="primary" @click="navigateToProject(scope.row)">{{ scope.row.project_name }}</el-link>
           </template>
         </el-table-column>
-        <el-table-column label="被审单位" prop="audited_unit" width="120"/>
+        <el-table-column label="被审计单位" prop="audited_unit" width="120"/>
         <el-table-column label="年度" prop="audit_year" width="80" align="center"/>
         <el-table-column label="状态" width="80" align="center">
           <template #default="scope">
@@ -239,6 +239,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { listPlan, addPlan, delPlan, recommendTargets, bindPlanProject, unbindPlanProject, getPlanProjects, getPlanSchemes, getProgress } from '@/api/audit/auditInfo'
 import { getToken } from '@/utils/auth'
 import request from '@/utils/request'
+import { cleanupUploadedFile } from '@/api/upload'
 
 const router = useRouter()
 const loading = ref(false)
@@ -424,26 +425,33 @@ function downloadTemplate() {
 function uploadAttachment(opt) {
   const fd = new FormData()
   fd.append('file', opt.file)
+  let uploadedPath = ''
   request({
     url: '/common/upload',
     method: 'post',
     data: fd,
     headers: { 'Content-Type': 'multipart/form-data' }
   }).then(res => {
-    request({
+    uploadedPath = res.fileName || res.url
+    return request({
       url: '/audit/info/plan/attachment',
       method: 'post',
       data: {
         planId: form.value.id,
         fileName: opt.file.name,
-        filePath: res.fileName || res.url,
+        filePath: uploadedPath,
         fileType: opt.file.name.split('.').pop(),
         fileSize: opt.file.size
       }
-    }).then(() => {
-      ElMessage.success('上传成功')
-      loadAttachments(form.value.id)
     })
+  }).then(() => {
+    ElMessage.success('上传成功')
+    loadAttachments(form.value.id)
+    opt.onSuccess?.()
+  }).catch(() => {
+    cleanupUploadedFile(uploadedPath)
+    ElMessage.error('上传失败')
+    opt.onError?.()
   })
 }
 

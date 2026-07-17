@@ -2,6 +2,7 @@ package com.ruoyi.system.service.impl;
 
 import com.ruoyi.system.config.AiModelProperties;
 import com.ruoyi.system.service.IAiDataAnalyzeService;
+import com.ruoyi.system.service.AuditProjectAccessService;
 
 import com.alibaba.fastjson2.JSON;
 import com.ruoyi.common.core.page.TableDataInfo;
@@ -33,6 +34,9 @@ public class AiDataAnalyzeServiceImpl implements IAiDataAnalyzeService
 
     @Autowired
     private ChatLanguageModel chatModel;
+
+    @Autowired
+    private AuditProjectAccessService projectAccessService;
 
 
     /** SQL 模板定义 */
@@ -123,7 +127,7 @@ public class AiDataAnalyzeServiceImpl implements IAiDataAnalyzeService
     }
 
     @Override
-    public Map<String, Object> analyzeChart(String dataText, String instruction,
+    public Map<String, Object> analyzeChart(String dataText, String instruction, Long projectId,
                                             String projectName, String keyword,
                                             String sourceType, String createBy)
     {
@@ -170,8 +174,8 @@ public class AiDataAnalyzeServiceImpl implements IAiDataAnalyzeService
             }
 
             // 保存（html_content 存 HTML，chart_data 存空数组兼容旧逻辑）
-            String sql = "INSERT INTO analysis_result (title, chart_data, html_content, summary, project_name, source_type, keyword, create_by, create_time) "
-                       + "VALUES (?, '[]'::jsonb, ?, ?, ?, ?, ?, ?, now()) RETURNING id";
+            String sql = "INSERT INTO analysis_result (title, chart_data, html_content, summary, project_id, project_name, source_type, keyword, create_by, create_time) "
+                       + "VALUES (?, '[]'::jsonb, ?, ?, ?, ?, ?, ?, ?, now()) RETURNING id";
             Long analysisId = null;
             try (Connection conn = dataSource.getConnection();
                  PreparedStatement ps = conn.prepareStatement(sql))
@@ -179,10 +183,11 @@ public class AiDataAnalyzeServiceImpl implements IAiDataAnalyzeService
                 ps.setString(1, title);
                 ps.setString(2, html);
                 ps.setString(3, summaryText);
-                ps.setString(4, projectName);
-                ps.setString(5, sourceType != null ? sourceType : "chat");
-                ps.setString(6, keyword);
-                ps.setString(7, createBy);
+                ps.setObject(4, projectId, java.sql.Types.BIGINT);
+                ps.setString(5, projectName);
+                ps.setString(6, sourceType != null ? sourceType : "chat");
+                ps.setString(7, keyword);
+                ps.setString(8, createBy);
                 try (ResultSet rs = ps.executeQuery())
                 {
                     if (rs.next()) analysisId = rs.getLong("id");
@@ -282,6 +287,7 @@ public class AiDataAnalyzeServiceImpl implements IAiDataAnalyzeService
     public Map<String, Object> getAnalysisResult(Long id)
     {
         Map<String, Object> result = new LinkedHashMap<>();
+        if (!canAccessResult(id)) return result;
         String sql = "SELECT * FROM analysis_result WHERE id = ?";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql))
@@ -295,6 +301,7 @@ public class AiDataAnalyzeServiceImpl implements IAiDataAnalyzeService
                     result.put("title", rs.getString("title"));
                     result.put("summary", rs.getString("summary"));
                     result.put("projectName", rs.getString("project_name"));
+                    result.put("projectId", rs.getObject("project_id"));
                     result.put("sourceType", rs.getString("source_type"));
                     result.put("keyword", rs.getString("keyword"));
                     result.put("createBy", rs.getString("create_by"));
@@ -319,6 +326,7 @@ public class AiDataAnalyzeServiceImpl implements IAiDataAnalyzeService
     @Override
     public String getAnalysisHtml(Long id)
     {
+        if (!canAccessResult(id)) return null;
         String sql = "SELECT html_content, chart_data, title, project_name, source_type, summary FROM analysis_result WHERE id = ?";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql))
@@ -380,34 +388,15 @@ public class AiDataAnalyzeServiceImpl implements IAiDataAnalyzeService
     @Override
     public TableDataInfo listAnalysisResults(String keyword, Integer pageNum, Integer pageSize)
     {
-        List<Map<String, Object>> list = new ArrayList<>();
-        String countSql = "SELECT count(*) FROM analysis_result"
-                + (keyword != null && !keyword.isBlank()
-                    ? " WHERE title ILIKE ? OR project_name ILIKE ? OR keyword ILIKE ?"
-                    : "");
+        List<Map<String, Object>> permitted = new ArrayList<>();
         String dataSql = "SELECT * FROM analysis_result"
                 + (keyword != null && !keyword.isBlank()
                     ? " WHERE title ILIKE ? OR project_name ILIKE ? OR keyword ILIKE ?"
                     : "")
-                + " ORDER BY create_time DESC LIMIT ? OFFSET ?";
+                + " ORDER BY create_time DESC";
 
         try (Connection conn = dataSource.getConnection())
         {
-            long total = 0;
-            try (PreparedStatement ps = conn.prepareStatement(countSql))
-            {
-                if (keyword != null && !keyword.isBlank())
-                {
-                    ps.setString(1, "%" + keyword + "%");
-                    ps.setString(2, "%" + keyword + "%");
-                    ps.setString(3, "%" + keyword + "%");
-                }
-                try (ResultSet rs = ps.executeQuery())
-                {
-                    if (rs.next()) total = rs.getLong(1);
-                }
-            }
-
             try (PreparedStatement ps = conn.prepareStatement(dataSql))
             {
                 int idx = 1;
@@ -417,28 +406,34 @@ public class AiDataAnalyzeServiceImpl implements IAiDataAnalyzeService
                     ps.setString(idx++, "%" + keyword + "%");
                     ps.setString(idx++, "%" + keyword + "%");
                 }
-                ps.setInt(idx++, pageSize);
-                ps.setInt(idx, (pageNum - 1) * pageSize);
 
                 try (ResultSet rs = ps.executeQuery())
                 {
                     while (rs.next())
                     {
+                        Long projectId = rs.getObject("project_id") == null ? null : rs.getLong("project_id");
+                        String createBy = rs.getString("create_by");
+                        if (!projectAccessService.canAccessAnalysis(projectId, createBy)) continue;
                         Map<String, Object> row = new LinkedHashMap<>();
                         row.put("id", rs.getLong("id"));
                         row.put("title", rs.getString("title"));
                         row.put("projectName", rs.getString("project_name"));
+                        row.put("projectId", projectId);
                         row.put("sourceType", rs.getString("source_type"));
                         row.put("keyword", rs.getString("keyword"));
                         row.put("createBy", rs.getString("create_by"));
+                        row.put("canManage", projectAccessService.canManageAnalysis(createBy));
                         row.put("createTime", rs.getTimestamp("create_time") != null
                                 ? rs.getTimestamp("create_time").toString() : null);
-                        list.add(row);
+                        permitted.add(row);
                     }
                 }
             }
-
-            return new TableDataInfo(list, total);
+            int safePage = pageNum == null || pageNum < 1 ? 1 : pageNum;
+            int safeSize = pageSize == null || pageSize < 1 ? 10 : Math.min(pageSize, 100);
+            int from = Math.min((safePage - 1) * safeSize, permitted.size());
+            int to = Math.min(from + safeSize, permitted.size());
+            return new TableDataInfo(new ArrayList<>(permitted.subList(from, to)), permitted.size());
         }
         catch (Exception e)
         {
@@ -450,6 +445,7 @@ public class AiDataAnalyzeServiceImpl implements IAiDataAnalyzeService
     @Override
     public int deleteAnalysisResult(Long id)
     {
+        if (!canManageResult(id)) return 0;
         String sql = "DELETE FROM analysis_result WHERE id = ?";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql))
@@ -468,6 +464,7 @@ public class AiDataAnalyzeServiceImpl implements IAiDataAnalyzeService
     public int deleteAnalysisResults(Long[] ids)
     {
         if (ids == null || ids.length == 0) return 0;
+        for (Long id : ids) if (!canManageResult(id)) return 0;
         StringBuilder sb = new StringBuilder("DELETE FROM analysis_result WHERE id IN (");
         for (int i = 0; i < ids.length; i++) { if (i > 0) sb.append(","); sb.append("?"); }
         sb.append(")");
@@ -487,20 +484,61 @@ public class AiDataAnalyzeServiceImpl implements IAiDataAnalyzeService
     @Override
     public int updateAnalysisResult(Long id, String title, String projectName, String keyword)
     {
-        String sql = "UPDATE analysis_result SET title = ?, project_name = ?, keyword = ? WHERE id = ?";
+        if (!canManageResult(id)) return 0;
+        String sql = "UPDATE analysis_result SET title = ?, keyword = ? WHERE id = ?";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql))
         {
             ps.setString(1, title);
-            ps.setString(2, projectName);
-            ps.setString(3, keyword);
-            ps.setLong(4, id);
+            ps.setString(2, keyword);
+            ps.setLong(3, id);
             return ps.executeUpdate();
         }
         catch (Exception e)
         {
             log.error("更新分析结果失败", e);
             return 0;
+        }
+    }
+
+    private boolean canAccessResult(Long id)
+    {
+        if (id == null) return false;
+        String sql = "SELECT project_id, create_by FROM analysis_result WHERE id = ?";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql))
+        {
+            ps.setLong(1, id);
+            try (ResultSet rs = ps.executeQuery())
+            {
+                if (!rs.next()) return false;
+                Long projectId = rs.getObject("project_id") == null ? null : rs.getLong("project_id");
+                return projectAccessService.canAccessAnalysis(projectId, rs.getString("create_by"));
+            }
+        }
+        catch (Exception e)
+        {
+            log.error("校验分析结果访问权限失败", e);
+            return false;
+        }
+    }
+
+    private boolean canManageResult(Long id)
+    {
+        if (id == null) return false;
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement("SELECT create_by FROM analysis_result WHERE id = ?"))
+        {
+            ps.setLong(1, id);
+            try (ResultSet rs = ps.executeQuery())
+            {
+                return rs.next() && projectAccessService.canManageAnalysis(rs.getString("create_by"));
+            }
+        }
+        catch (Exception e)
+        {
+            log.error("校验分析结果维护权限失败", e);
+            return false;
         }
     }
 

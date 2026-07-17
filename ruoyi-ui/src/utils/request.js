@@ -6,6 +6,7 @@ import { tansParams, blobValidate } from '@/utils/ruoyi'
 import cache from '@/plugins/cache'
 import { saveAs } from 'file-saver'
 import useUserStore from '@/store/modules/user'
+import { decryptResponse, encryptConfig, shouldEncrypt } from '@/utils/apiCrypto'
 
 let downloadLoadingInstance
 // 是否显示重新登录
@@ -21,7 +22,7 @@ const service = axios.create({
 })
 
 // request拦截器
-service.interceptors.request.use(config => {
+service.interceptors.request.use(async config => {
   // 是否需要设置 token
   const isToken = (config.headers || {}).isToken === false
   // 是否需要防止数据重复提交
@@ -32,7 +33,7 @@ service.interceptors.request.use(config => {
     config.headers['Authorization'] = 'Bearer ' + getToken() // 让每个请求携带自定义token 请根据实际情况自行修改
   }
   // get请求映射params参数
-  if (config.method === 'get' && config.params) {
+  if (config.method === 'get' && config.params && !shouldEncrypt(config)) {
     let url = config.url + '?' + tansParams(config.params)
     url = url.slice(0, -1)
     config.params = {}
@@ -66,14 +67,15 @@ service.interceptors.request.use(config => {
       }
     }
   }
-  return config
+  return shouldEncrypt(config) ? encryptConfig(config) : config
 }, error => {
     console.log(error)
     Promise.reject(error)
 })
 
 // 响应拦截器
-service.interceptors.response.use(res => {
+service.interceptors.response.use(async res => {
+    res.data = decryptResponse(res.data, res.config._cryptoSessionKey)
     // 未设置状态码则默认成功状态
     const code = res.data.code || 200
     // 获取错误信息
@@ -81,6 +83,10 @@ service.interceptors.response.use(res => {
     // 二进制数据则直接返回
     if (res.request.responseType ===  'blob' || res.request.responseType ===  'arraybuffer') {
       return res.data
+    }
+    const isAnonymousRequest = (res.config.headers || {}).isToken === false || (res.config.headers || {}).isToken === 'false'
+    if (code === 401 && isAnonymousRequest) {
+      return Promise.reject('匿名接口未授权，请检查后端白名单或服务是否已重启。')
     }
     if (code === 401) {
       if (!isRelogin.show) {
@@ -110,6 +116,10 @@ service.interceptors.response.use(res => {
   },
   error => {
     console.log('err' + error)
+    const isAnonymousRequest = (error.config?.headers || {}).isToken === false || (error.config?.headers || {}).isToken === 'false'
+    if (error.response?.status === 401 && isAnonymousRequest) {
+      return Promise.reject(error)
+    }
     let { message } = error
     if (message == "Network Error") {
       message = "后端接口连接异常"

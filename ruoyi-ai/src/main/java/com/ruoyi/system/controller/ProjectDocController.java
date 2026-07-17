@@ -8,6 +8,7 @@ import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.config.RuoYiConfig;
 import com.ruoyi.common.utils.file.FileUtils;
 import com.ruoyi.system.domain.ProjectDocument;
+import com.ruoyi.system.service.AuditProjectAccessService;
 import com.ruoyi.system.service.IProjectDocService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
@@ -15,11 +16,15 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -40,6 +45,12 @@ public class ProjectDocController extends BaseController
     @Autowired
     private IProjectDocService projectDocService;
 
+    @Autowired
+    private AuditProjectAccessService projectAccessService;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
     /**
      * 获取项目文档列表
      * GET /project/doc/list?projectId=1&docType=底稿
@@ -48,8 +59,47 @@ public class ProjectDocController extends BaseController
     public AjaxResult list(@RequestParam Long projectId,
                            @RequestParam(required = false) String docType)
     {
+        if (!projectAccessService.canAccessProject(projectId))
+        {
+            return AjaxResult.error("无权访问该项目资料");
+        }
         List<ProjectDocument> list = projectDocService.listDocuments(projectId, docType);
+        if (canConfirmPrepareMaterial())
+        {
+            String sql = "SELECT pd.* FROM project_document pd "
+                    + "JOIN audit_material_checklist c ON c.project_id=pd.project_id AND c.file_path=pd.file_path "
+                    + "WHERE pd.project_id=? AND pd.status=0 AND c.submit_status=1 "
+                    + (docType == null || docType.isBlank() ? "" : "AND pd.doc_type=? ")
+                    + "ORDER BY pd.doc_type, pd.create_time DESC";
+            Object[] args = docType == null || docType.isBlank()
+                    ? new Object[] { projectId }
+                    : new Object[] { projectId, docType };
+            list.addAll(jdbcTemplate.query(sql, (rs, rowNum) -> {
+                ProjectDocument doc = new ProjectDocument();
+                doc.setId(rs.getLong("id"));
+                doc.setProjectId(rs.getLong("project_id"));
+                doc.setPlanId(rs.getObject("plan_id") == null ? null : rs.getLong("plan_id"));
+                doc.setDocType(rs.getString("doc_type"));
+                doc.setFileName(rs.getString("file_name"));
+                doc.setFilePath(rs.getString("file_path"));
+                doc.setFileSize(rs.getLong("file_size"));
+                doc.setFileExt(rs.getString("file_ext"));
+                doc.setContentText(rs.getString("content_text"));
+                doc.setStatus(rs.getInt("status"));
+                doc.setChunkCount(rs.getInt("chunk_count"));
+                doc.setCreateBy(rs.getString("create_by"));
+                doc.setCreateTime(rs.getTimestamp("create_time"));
+                doc.setUpdateTime(rs.getTimestamp("update_time"));
+                return doc;
+            }, args));
+        }
         return success(list);
+    }
+
+    private boolean canConfirmPrepareMaterial()
+    {
+        java.util.Set<String> permissions = SecurityUtils.getLoginUser().getPermissions();
+        return permissions != null && (permissions.contains("*:*:*") || permissions.contains("audit:prepare:confirm"));
     }
 
     /**
@@ -70,6 +120,10 @@ public class ProjectDocController extends BaseController
 
         try
         {
+            if (!projectAccessService.canAccessProject(projectId))
+            {
+                return AjaxResult.error("无权向该项目上传资料");
+            }
             String createBy = SecurityUtils.getUsername();
             ProjectDocument doc = projectDocService.uploadDocument(projectId, planId, docType, file, createBy);
             return success(doc);
@@ -87,12 +141,39 @@ public class ProjectDocController extends BaseController
     @GetMapping("/{id}/content")
     public AjaxResult getContent(@PathVariable Long id)
     {
+        ProjectDocument doc = projectDocService.getDocumentById(id);
+        if (!canAccessDocument(doc))
+        {
+            return AjaxResult.error("无权访问该文档");
+        }
         String content = projectDocService.getDocumentContent(id);
         if (content == null)
         {
             return AjaxResult.error("文档不存在");
         }
         return success(content);
+    }
+
+    /** 将在线编辑内容写回原 DOCX 文件。 */
+    @PreAuthorize("@ss.hasPermi('audit:projectDoc:upload')")
+    @Log(title = "项目文档", businessType = BusinessType.UPDATE)
+    @PutMapping("/{id}/docx")
+    public AjaxResult saveDocx(@PathVariable Long id, @RequestBody Map<String, String> body)
+    {
+        ProjectDocument doc = projectDocService.getDocumentById(id);
+        if (!canAccessDocument(doc))
+        {
+            return AjaxResult.error("无权编辑该文档");
+        }
+        try
+        {
+            projectDocService.saveDocx(id, body.get("htmlContent"));
+            return success();
+        }
+        catch (IOException e)
+        {
+            return AjaxResult.error("保存失败: " + e.getMessage());
+        }
     }
 
     /**
@@ -103,6 +184,11 @@ public class ProjectDocController extends BaseController
     @DeleteMapping("/{id}")
     public AjaxResult delete(@PathVariable Long id)
     {
+        ProjectDocument doc = projectDocService.getDocumentById(id);
+        if (!canAccessDocument(doc))
+        {
+            return AjaxResult.error("无权删除该文档");
+        }
         int rows = projectDocService.deleteDocument(id);
         return rows > 0 ? success() : AjaxResult.error("删除失败");
     }
@@ -115,6 +201,7 @@ public class ProjectDocController extends BaseController
     public AjaxResult listByPlan(@RequestParam Long planId)
     {
         List<ProjectDocument> list = projectDocService.listByPlan(planId);
+        list.removeIf(doc -> !canAccessDocument(doc));
         return success(list);
     }
 
@@ -127,6 +214,7 @@ public class ProjectDocController extends BaseController
     {
         ProjectDocument doc = projectDocService.getDocumentById(id);
         if (doc == null) return AjaxResult.error("文档不存在");
+        if (!canAccessDocument(doc)) return AjaxResult.error("无权访问该文档");
         return success(doc);
     }
 
@@ -139,6 +227,7 @@ public class ProjectDocController extends BaseController
     {
         ProjectDocument doc = projectDocService.getDocumentById(id);
         if (doc == null) return AjaxResult.error("文档不存在");
+        if (!canAccessDocument(doc)) return AjaxResult.error("无权访问该文档");
 
         String ext = doc.getFileExt();
         if (!"xlsx".equalsIgnoreCase(ext) && !"xls".equalsIgnoreCase(ext))
@@ -257,6 +346,7 @@ public class ProjectDocController extends BaseController
     {
         ProjectDocument doc = projectDocService.getDocumentById(id);
         if (doc == null) return AjaxResult.error("文档不存在");
+        if (!canAccessDocument(doc)) return AjaxResult.error("无权修改该文档");
 
         String ext = doc.getFileExt();
         if (!"xlsx".equalsIgnoreCase(ext) && !"xls".equalsIgnoreCase(ext))
@@ -306,6 +396,7 @@ public class ProjectDocController extends BaseController
     {
         ProjectDocument doc = projectDocService.getDocumentById(id);
         if (doc == null) return AjaxResult.error("文档不存在");
+        if (!canAccessDocument(doc)) return AjaxResult.error("无权修改该文档");
 
         String ext = doc.getFileExt();
         String filePath = doc.getFilePath();
@@ -354,6 +445,7 @@ public class ProjectDocController extends BaseController
     {
         ProjectDocument doc = projectDocService.getDocumentById(id);
         if (doc == null) return AjaxResult.error("文档不存在");
+        if (!canAccessDocument(doc)) return AjaxResult.error("无权修改该文档");
 
         String ext = doc.getFileExt();
         String filePath = doc.getFilePath();
@@ -409,9 +501,36 @@ public class ProjectDocController extends BaseController
             response.setStatus(404);
             return;
         }
+        if (!canAccessDocument(doc))
+        {
+            response.setStatus(403);
+            return;
+        }
 
         // filePath 格式如: /profile/upload/2026/07/07/xxx.docx
         String filePath = doc.getFilePath();
+        response.setContentType("application/octet-stream");
+        response.setHeader("Content-Disposition",
+                "attachment;filename=" + URLEncoder.encode(doc.getFileName(), StandardCharsets.UTF_8)
+                        .replace("+", "%20"));
+
+        if (filePath.startsWith("/audit-template/") && !filePath.contains(".."))
+        {
+            ClassPathResource resource = new ClassPathResource("static" + filePath);
+            if (!resource.exists())
+            {
+                response.setStatus(404);
+                return;
+            }
+            response.setContentLengthLong(resource.contentLength());
+            try (InputStream input = resource.getInputStream())
+            {
+                input.transferTo(response.getOutputStream());
+            }
+            response.getOutputStream().flush();
+            return;
+        }
+
         if (filePath.startsWith("/profile"))
         {
             filePath = RuoYiConfig.getProfile() + filePath.substring("/profile".length());
@@ -424,13 +543,14 @@ public class ProjectDocController extends BaseController
             return;
         }
 
-        response.setContentType("application/octet-stream");
-        response.setHeader("Content-Disposition",
-                "attachment;filename=" + URLEncoder.encode(doc.getFileName(), StandardCharsets.UTF_8)
-                        .replace("+", "%20"));
         response.setContentLengthLong(file.length());
 
         FileUtils.writeBytes(filePath, response.getOutputStream());
         response.getOutputStream().flush();
+    }
+
+    private boolean canAccessDocument(ProjectDocument doc)
+    {
+        return doc != null && projectAccessService.canAccessProject(doc.getProjectId());
     }
 }

@@ -303,4 +303,22 @@ async function toggleTheme(event) {
     }
   }
 }
+@media (max-width: 768px) {
+  .navbar {
+    padding-right: 8px;
+
+    .hamburger-container { margin-right: 0; }
+
+    .breadcrumb-container,
+    .topmenu-container,
+    .topbar-container { display: none !important; }
+
+    .right-menu .avatar-container .avatar-wrapper {
+      right: 0;
+
+      .user-avatar { margin-right: 0; }
+      .user-nickname { display: none; }
+    }
+  }
+}
 </style>

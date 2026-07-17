@@ -5,6 +5,7 @@ import java.util.List;
 
 public interface AuditMaterialChecklistMapper
 {
+    AuditMaterialChecklist selectById(Long id);
     List<AuditMaterialChecklist> selectByProjectId(Long projectId);
     int insert(AuditMaterialChecklist m);
     int update(AuditMaterialChecklist m);

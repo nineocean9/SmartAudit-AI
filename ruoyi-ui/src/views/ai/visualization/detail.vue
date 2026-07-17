@@ -35,7 +35,7 @@
 
       <!-- AI 生成的 HTML 驾驶舱 -->
       <el-card class="dashboard-iframe-card">
-        <iframe ref="dashboardIframe" :src="htmlUrl" class="dashboard-iframe" frameborder="0" allowfullscreen></iframe>
+        <iframe ref="dashboardIframe" :srcdoc="htmlContent" sandbox="allow-scripts" class="dashboard-iframe" frameborder="0"></iframe>
       </el-card>
 
       <!-- AI 分析总结 -->
@@ -53,27 +53,24 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { getAnalysisResult } from '@/api/ai/dataAnalyze'
+import { getAnalysisResult, getAnalysisHtml } from '@/api/ai/dataAnalyze'
 
 const route = useRoute()
 const analysisId = ref(null)
 const title = ref('')
 const summary = ref('')
 const loading = ref(false)
+const htmlContent = ref('')
 const meta = ref({ createTime: '', projectName: '', keyword: '', sourceType: '' })
 
-const baseUrl = import.meta.env.VITE_APP_BASE_API || ''
-
-const htmlUrl = computed(() => {
-  if (!analysisId.value) return ''
-  return `${baseUrl}/ai/data/analysis/${analysisId.value}/html`
-})
-
 function openHtmlNewTab() {
-  if (htmlUrl.value) window.open(htmlUrl.value, '_blank')
+  if (!htmlContent.value) return
+  const url = URL.createObjectURL(new Blob([htmlContent.value], { type: 'text/html;charset=utf-8' }))
+  window.open(url, '_blank', 'noopener,noreferrer')
+  setTimeout(() => URL.revokeObjectURL(url), 60000)
 }
 
 function renderMarkdown(text) {
@@ -135,6 +132,8 @@ async function loadData(id) {
         keyword: res.data.keyword || '',
         sourceType: res.data.sourceType || ''
       }
+      const htmlBlob = await getAnalysisHtml(id)
+      htmlContent.value = await htmlBlob.text()
     } else {
       ElMessage.warning('未找到分析结果')
     }
@@ -146,8 +145,6 @@ async function loadData(id) {
 }
 
 function refreshData() {
-  const iframe = document.querySelector('.dashboard-iframe')
-  if (iframe) iframe.src = iframe.src
   if (analysisId.value) loadData(analysisId.value)
 }
 

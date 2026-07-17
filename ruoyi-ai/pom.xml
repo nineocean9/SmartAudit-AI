@@ -38,6 +38,12 @@
             <version>5.3.0</version>
         </dependency>
 
+        <dependency>
+            <groupId>org.jsoup</groupId>
+            <artifactId>jsoup</artifactId>
+            <version>1.18.3</version>
+        </dependency>
+
         <!-- Apache PDFBox（PDF 直解析） -->
         <dependency>
             <groupId>org.apache.pdfbox</groupId>

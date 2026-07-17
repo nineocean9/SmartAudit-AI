@@ -6,6 +6,7 @@
         <id property="id" column="id" />
         <result property="projectName" column="project_name" />
         <result property="auditedUnit" column="audited_unit" />
+        <result property="deptId" column="dept_id" />
         <result property="auditType" column="audit_type" />
         <result property="auditYear" column="audit_year" />
         <result property="status" column="status" />

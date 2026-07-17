@@ -56,19 +56,15 @@ export const constantRoutes = [
     path: '/visualization/detail',
     component: Layout,
     hidden: true,
+    permissions: ['audit:visual:view'],
     children: [
       {
         path: '',
         component: () => import('@/views/ai/visualization/detail'),
         name: 'VisualizationDetail',
-        meta: { title: '数据可视化详情' }
+        meta: { title: '数据可视化详情', activeMenu: '/audit-ai-support/visualization/index' }
       }
     ]
-  },
-  {
-    path: "/:pathMatch(.*)*",
-    component: () => import('@/views/error/404'),
-    hidden: true
   },
   {
     path: '/401',
@@ -112,12 +108,41 @@ export const constantRoutes = [
     path: '/audit/issue',
     component: Layout,
     hidden: true,
+    permissions: ['audit:issue:view'],
     children: [
       {
         path: '',
         component: () => import('@/views/audit/issue'),
-        name: 'AuditIssue',
-        meta: { title: '审计问题管理', icon: 'bug' }
+        name: 'AuditIssueDirect',
+        meta: { title: '审计问题管理', icon: 'bug', activeMenu: '/audit-execution/issue' }
+      }
+    ]
+  },
+  {
+    path: '/audit/plan',
+    component: Layout,
+    hidden: true,
+    permissions: ['audit:plan:view'],
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/audit/plan'),
+        name: 'AuditPlanDirect',
+        meta: { title: '审计计划', icon: 'date', activeMenu: '/audit-planning/plan' }
+      }
+    ]
+  },
+  {
+    path: '/audit/projectLib',
+    component: Layout,
+    hidden: true,
+    permissions: ['audit:projectLib:view'],
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/audit/projectLib'),
+        name: 'AuditProjectLibDirect',
+        meta: { title: '项目库', icon: 'documentation', activeMenu: '/audit-planning/projectLib' }
       }
     ]
   },
@@ -146,6 +171,167 @@ export const constantRoutes = [
         meta: { title: '文档预览', icon: 'document' }
       }
     ]
+  },
+  {
+    path: '/audit/project',
+    component: Layout,
+    hidden: true,
+    permissions: ['audit:project:view'],
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/audit/project'),
+        name: 'AuditProjectWorkbench',
+        meta: { title: '项目工作台', icon: 'project', activeMenu: '/audit-planning/project-workspace' }
+      }
+    ]
+  },
+  {
+    path: '/audit/progress',
+    component: Layout,
+    hidden: true,
+    permissions: ['audit:progress:view'],
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/audit/progress'),
+        name: 'AuditProgress',
+        meta: { title: '项目进度', icon: 'chart', activeMenu: '/audit-execution/progress' }
+      }
+    ]
+  },
+  {
+    path: '/audit/report',
+    component: Layout,
+    hidden: true,
+    permissions: ['audit:report:view'],
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/audit/report'),
+        name: 'AuditReportDirect',
+        meta: { title: '审计报告', icon: 'document', activeMenu: '/audit-closeout/report' }
+      }
+    ]
+  },
+  {
+    path: '/audit/workpaper',
+    component: Layout,
+    hidden: true,
+    permissions: ['audit:workpaper:view'],
+    roles: ['audit_project_leader', 'audit_staff', 'intermediary_auditor'],
+    accessMode: 'any',
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/audit/workpaper'),
+        name: 'AuditWorkpaperDirect',
+        meta: { title: '底稿管理', icon: 'form', activeMenu: '/audit-execution/workpaper' }
+      }
+    ]
+  },
+  {
+    path: '/audit/rectification',
+    component: Layout,
+    hidden: true,
+    permissions: ['audit:rectification:view'],
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/audit/rectification'),
+        name: 'AuditRectificationDirect',
+        meta: { title: '整改跟踪', icon: 'edit', activeMenu: '/audit-closeout/rectification' }
+      }
+    ]
+  },
+  {
+    path: '/audit/archive',
+    component: Layout,
+    hidden: true,
+    permissions: ['audit:archive:view'],
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/audit/archive'),
+        name: 'AuditArchiveDirect',
+        meta: { title: '项目归档', icon: 'folder', activeMenu: '/audit-closeout/archive' }
+      }
+    ]
+  },
+  {
+    path: '/dashboard/index',
+    component: Layout,
+    hidden: true,
+    permissions: ['audit:visual:view'],
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/ai/dataDashboard'),
+        name: 'DataDashboardDirect',
+        meta: { title: '数据分析仪表盘', icon: 'dashboard', activeMenu: '/audit-ai-support/visualization/index' }
+      }
+    ]
+  },
+  {
+    path: '/visualization/index',
+    component: Layout,
+    hidden: true,
+    permissions: ['audit:visual:view'],
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/ai/visualization/index'),
+        name: 'VisualizationListDirect',
+        meta: { title: '数据可视化', icon: 'chart', activeMenu: '/audit-ai-support/visualization/index' }
+      }
+    ]
+  },
+  {
+    path: '/ai/chat',
+    component: Layout,
+    hidden: true,
+    roles: ['school_leader', 'audit_director', 'audit_project_leader', 'audit_staff'],
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/ai/chat'),
+        name: 'AiChatDirect',
+        meta: { title: 'AI 审计助手', icon: 'message', activeMenu: '/audit-ai-support/aiChat' }
+      }
+    ]
+  },
+  {
+    path: '/ai/forensic',
+    component: Layout,
+    hidden: true,
+    permissions: ['ai:forensic:view'],
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/ai/forensic'),
+        name: 'AiForensicDirect',
+        meta: { title: 'AI 取证分析', icon: 'form', activeMenu: '/audit-execution/forensic' }
+      }
+    ]
+  },
+  {
+    path: '/ai/basis',
+    component: Layout,
+    hidden: true,
+    permissions: ['ai:basis:query', 'audit:basis:query'],
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/ai/basis'),
+        name: 'AiBasisDirect',
+        meta: { title: '审计依据库', icon: 'documentation', activeMenu: '/audit-resource/basis' }
+      }
+    ]
+  },
+  {
+    path: "/:pathMatch(.*)*",
+    component: () => import('@/views/error/404'),
+    hidden: true
   }
 ]
 export const dynamicRoutes = [
@@ -292,7 +478,7 @@ export const dynamicRoutes = [
       {
         path: '',
         component: () => import('@/views/audit/schemeTemplate'),
-        name: 'SchemeTemplate',
+        name: 'SchemeTemplateStandalone',
         meta: { title: '方案模板库' }
       }
     ]
@@ -301,12 +487,13 @@ export const dynamicRoutes = [
     path: '/audit/prepare',
     component: Layout,
     hidden: true,
+    permissions: ['audit:prepare:view'],
     children: [
       {
         path: '',
         component: () => import('@/views/audit/prepare'),
         name: 'AuditPrepare',
-        meta: { title: '审计准备' }
+        meta: { title: '审计准备', activeMenu: '/audit-prepare-flow/prepare' }
       }
     ]
   },

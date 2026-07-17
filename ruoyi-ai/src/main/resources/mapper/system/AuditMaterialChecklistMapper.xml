@@ -6,10 +6,28 @@
         <result property="materialName" column="material_name"/><result property="materialType" column="material_type"/>
         <result property="required" column="required"/><result property="submitStatus" column="submit_status"/>
         <result property="filePath" column="file_path"/><result property="submitBy" column="submit_by"/>
+        <result property="submitByName" column="submit_by_name"/>
+        <result property="submitByDept" column="submit_by_dept"/>
+        <result property="submitByRole" column="submit_by_role"/>
         <result property="submitTime" column="submit_time"/><result property="source" column="source"/>
         <result property="createTime" column="create_time"/>
     </resultMap>
-    <select id="selectByProjectId" resultMap="Result">SELECT * FROM audit_material_checklist WHERE project_id=#{projectId} ORDER BY create_time</select>
+    <select id="selectById" resultMap="Result">
+        SELECT * FROM audit_material_checklist WHERE id=#{id}
+    </select>
+    <select id="selectByProjectId" resultMap="Result">
+        SELECT c.*,
+               u.nick_name AS submit_by_name,
+               d.dept_name AS submit_by_dept,
+               r.role_name AS submit_by_role
+        FROM audit_material_checklist c
+        LEFT JOIN sys_user u ON u.user_name = c.submit_by OR u.nick_name = c.submit_by
+        LEFT JOIN sys_dept d ON d.dept_id = u.dept_id
+        LEFT JOIN sys_user_role ur ON ur.user_id = u.user_id
+        LEFT JOIN sys_role r ON r.role_id = ur.role_id
+        WHERE c.project_id=#{projectId}
+        ORDER BY c.create_time
+    </select>
     <insert id="insert" parameterType="AuditMaterialChecklist" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO audit_material_checklist(project_id,material_name,material_type,required,submit_status,file_path,submit_by,source,create_time)
         VALUES(#{projectId},#{materialName},#{materialType},#{required},0,#{filePath},#{submitBy},#{source},now())</insert>

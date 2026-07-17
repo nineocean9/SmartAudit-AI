@@ -17,6 +17,7 @@ public class AuditReport extends BaseEntity
     private String title;
     private String versionType;
     private String content;
+    private String fileUrl;
     private Integer status;
 
     /** 版本号 */
@@ -28,7 +29,7 @@ public class AuditReport extends BaseEntity
     /** JOIN字段：项目名称 */
     private String projectName;
 
-    /** JOIN字段：被审单位 */
+    /** JOIN字段：被审计单位 */
     private String auditedUnit;
 
     public Long getId() { return id; }
@@ -41,6 +42,8 @@ public class AuditReport extends BaseEntity
     public void setVersionType(String v) { this.versionType = v; }
     public String getContent() { return content; }
     public void setContent(String v) { this.content = v; }
+    public String getFileUrl() { return fileUrl; }
+    public void setFileUrl(String v) { this.fileUrl = v; }
     public Integer getStatus() { return status; }
     public void setStatus(Integer v) { this.status = v; }
     public Integer getVersionNo() { return versionNo; }

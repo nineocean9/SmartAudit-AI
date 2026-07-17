@@ -2,160 +2,212 @@
   <div class="app-container">
     <el-form :model="q" inline>
       <el-form-item label="项目">
-        <el-select v-model="q.projectId" placeholder="选择项目" clearable @change="getList">
-          <el-option v-for="p in projects" :key="p.id" :label="p.project_name" :value="p.id" />
+        <el-select v-model="q.projectId" placeholder="全部项目" clearable @change="getList" style="width:260px">
+          <el-option v-for="p in projects" :key="p.id" :label="p.project_name || p.projectName" :value="p.id" />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="版本">
+        <el-select v-model="q.versionType" placeholder="全部" clearable @change="getList" style="width:150px">
+          <el-option v-for="v in versions" :key="v" :label="v" :value="v" />
         </el-select>
       </el-form-item>
       <el-form-item>
         <el-button type="primary" icon="Search" @click="getList">查询</el-button>
+        <el-button icon="Refresh" @click="q = {}; getList()">重置</el-button>
       </el-form-item>
     </el-form>
-    <el-button type="primary" icon="Plus" @click="openAdd" style="margin-bottom:12px">生成报告</el-button>
 
-    <el-row :gutter="16">
-      <!-- 左侧：报告列表 -->
-      <el-col :span="viewingReport ? 8 : 24">
-        <el-table v-loading="loading" :data="list" size="small" :highlight-current-row="true" @row-click="view">
-          <el-table-column label="项目" prop="projectName" min-width="160" show-overflow-tooltip />
-          <el-table-column label="版本" prop="versionType" width="120" />
-          <el-table-column label="状态" width="80" align="center">
-            <template #default="s">
-              <el-tag :type="s.row.status===2?'success':s.row.status===1?'warning':'info'" size="small">
-                {{s.row.status===2?'已审批':s.row.status===1?'待审批':'草稿'}}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="120" fixed="right" align="center" v-if="!viewingReport">
-            <template #default="s">
-              <el-button link type="primary" size="small" @click.stop="view(s.row)">查看</el-button>
-              <el-button link type="primary" size="small" v-hasPermi="['audit:report:edit']" @click.stop="openEdit(s.row)">编辑</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </el-col>
-
-      <!-- 右侧：报告内容展示面板 -->
-      <el-col :span="16" v-if="viewingReport">
-        <el-card>
-          <template #header>
-            <div style="display:flex;align-items:center;justify-content:space-between">
-              <span style="font-weight:600">
-                <el-icon style="margin-right:4px;vertical-align:middle"><Document /></el-icon>
-                {{ viewingReport.projectName }} · {{ viewingReport.versionType || '报告' }}
-              </span>
-              <span>
-                <el-button size="small" type="primary" @click="openEdit(viewingReport)">编辑</el-button>
-                <el-button size="small" @click="viewingReport=null">关闭</el-button>
-              </span>
-            </div>
-          </template>
-          <div class="report-content" v-html="formatContent(viewContent)" />
-        </el-card>
-      </el-col>
+    <el-row :gutter="10" class="mb8">
+      <el-col :span="1.5"><el-button type="primary" icon="Plus" @click="openAdd">新建报告</el-button></el-col>
     </el-row>
 
-    <!-- 编辑报告弹窗 -->
-    <el-dialog title="编辑报告" v-model="dlgEdit" width="750px" top="5vh">
-      <el-form :model="editForm" label-width="80px">
+    <el-table v-loading="loading" :data="list" border highlight-current-row>
+      <el-table-column label="项目" prop="projectName" min-width="180" show-overflow-tooltip />
+      <el-table-column label="报告标题" prop="title" min-width="220" show-overflow-tooltip>
+        <template #default="scope">{{ scope.row.title || scope.row.projectName || '未命名报告' }}</template>
+      </el-table-column>
+      <el-table-column label="版本" prop="versionType" width="130" align="center">
+        <template #default="scope"><el-tag :type="versionTag(scope.row.versionType)" size="small">{{ scope.row.versionType }}</el-tag></template>
+      </el-table-column>
+      <el-table-column label="来源" width="90" align="center">
+        <template #default="scope"><el-tag :type="scope.row.fileUrl ? 'success' : 'info'" size="small">{{ scope.row.fileUrl ? 'Word' : '文本' }}</el-tag></template>
+      </el-table-column>
+      <el-table-column label="状态" width="90" align="center">
+        <template #default="scope"><el-tag :type="scope.row.status === 2 ? 'success' : scope.row.status === 1 ? 'warning' : 'info'" size="small">{{ scope.row.status === 2 ? '已审定' : scope.row.status === 1 ? '待审定' : '草稿' }}</el-tag></template>
+      </el-table-column>
+      <el-table-column label="创建时间" prop="createTime" width="180" />
+      <el-table-column label="操作" width="150" fixed="right" align="center">
+        <template #default="scope">
+          <el-button link type="primary" @click="openReportDoc(scope.row, false)">预览</el-button>
+          <el-button link type="primary" @click="openReportDoc(scope.row, true)">编辑</el-button>
+        </template>
+      </el-table-column>
+    </el-table>
+
+    <el-dialog title="新建报告" v-model="dlgAdd" width="620px" destroy-on-close>
+      <el-form :model="form" label-width="100px">
         <el-form-item label="项目">
-          <el-select v-model="editForm.projectId" style="width:100%">
-            <el-option v-for="p in projects" :key="p.id" :label="p.project_name" :value="p.id" />
+          <el-select v-model="form.projectId" style="width:100%" filterable>
+            <el-option v-for="p in projects" :key="p.id" :label="p.project_name || p.projectName" :value="p.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="版本">
-          <el-select v-model="editForm.versionType" style="width:100%">
-            <el-option label="处内审核稿" value="处内审核稿" />
-            <el-option label="征求意见稿" value="征求意见稿" />
-            <el-option label="正式稿" value="正式稿" />
+          <el-select v-model="form.versionType" style="width:100%">
+            <el-option v-for="v in versions" :key="v" :label="v" :value="v" />
           </el-select>
         </el-form-item>
-        <el-form-item label="标题">
-          <el-input v-model="editForm.title" placeholder="报告标题" />
+        <el-form-item label="报告标题"><el-input v-model="form.title" placeholder="请输入报告标题" /></el-form-item>
+        <el-form-item label="创建方式">
+          <el-radio-group v-model="createMode">
+            <el-radio-button label="new">新建Word</el-radio-button>
+            <el-radio-button label="import">导入Word</el-radio-button>
+          </el-radio-group>
         </el-form-item>
-        <el-form-item label="内容">
-          <el-input type="textarea" v-model="editForm.content" :rows="12" placeholder="请输入报告内容..." />
+        <el-form-item v-if="createMode === 'import'" label="Word文件">
+          <el-upload action="#" :http-request="uploadReportWord" :limit="1" accept=".docx" drag>
+            <el-icon class="el-icon--upload upload-icon"><Upload /></el-icon>
+            <div class="el-upload__text">拖拽 Word 文件到此处，或 <em>点击导入</em></div>
+            <template #tip><div class="el-upload__tip">支持 .docx，导入后自动打开预览编辑。</div></template>
+          </el-upload>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dlgEdit=false">取消</el-button>
-        <el-button type="primary" @click="submitEdit">保存</el-button>
+        <el-button @click="dlgAdd = false">取消</el-button>
+        <el-button v-if="createMode === 'new'" type="primary" @click="createBlankReport">新建Word</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ops } from '@/api/audit/auditOps'
 import { getProgress } from '@/api/audit/auditInfo'
 import { ElMessage } from 'element-plus'
-import { Document } from '@element-plus/icons-vue'
+import { Upload } from '@element-plus/icons-vue'
+import request from '@/utils/request'
+import { cleanupUploadedFile } from '@/api/upload'
 
+const router = useRouter()
+const versions = ['处内审核稿', '征求意见稿', '正式稿']
 const projects = ref([])
 const q = ref({})
 const list = ref([])
 const loading = ref(false)
-const viewingReport = ref(null)
-const viewContent = ref('')
-const dlgEdit = ref(false)
-const editForm = ref({})
+const dlgAdd = ref(false)
+const createMode = ref('new')
+const form = ref({ versionType: '处内审核稿' })
+const blankReportUrl = '/audit-template/default/audit-report-draft-template.docx'
 
-getProgress().then(r => { projects.value = r.data || [] })
+onMounted(() => {
+  getProgress().then(r => { projects.value = r.data || [] })
+  getList()
+})
 
 function getList() {
   loading.value = true
-  ops.reportList(q.value.projectId).then(r => { list.value = r.data || [] }).finally(() => loading.value = false)
+  ops.reportList(q.value.projectId).then(r => {
+    let data = r.data || r.rows || []
+    if (q.value.versionType) data = data.filter(d => d.versionType === q.value.versionType)
+    list.value = data
+  }).finally(() => { loading.value = false })
 }
 
-function view(row) {
-  ops.reportInfo(row.id).then(r => {
-    viewContent.value = r.data?.content || ''
-    viewingReport.value = row
+function openAdd() {
+  form.value = { versionType: '处内审核稿' }
+  createMode.value = 'new'
+  dlgAdd.value = true
+}
+
+function createBlankReport() {
+  if (!validateBase()) return
+  const title = form.value.title || '审计报告'
+  ops.addReport({
+    projectId: form.value.projectId,
+    versionType: form.value.versionType,
+    title,
+    content: '[Word报告] ' + title,
+    fileUrl: blankReportUrl
+  }).then(r => {
+    ElMessage.success('报告已创建')
+    dlgAdd.value = false
+    getList()
+    const id = r.data?.id || r.id
+    openReportDoc({ ...form.value, id, title, fileUrl: blankReportUrl }, true)
   })
 }
 
-function openAdd() { editForm.value = {}; dlgEdit.value = true }
-function openEdit(r) {
-  editForm.value = { id: r.id, projectId: r.projectId, versionType: r.versionType, title: r.title, content: r.content || viewContent.value }
-  dlgEdit.value = true
-}
-
-function submitEdit() {
-  const api = editForm.value.id ? ops.editReport(editForm.value) : ops.addReport(editForm.value)
-  api.then(r => {
-    if (r.code === 200) {
-      ElMessage.success('保存成功')
-      dlgEdit.value = false
-      getList()
-      if (viewingReport.value && editForm.value.id === viewingReport.value.id) {
-        viewContent.value = editForm.value.content
-      }
-    }
+function uploadReportWord(opt) {
+  if (!validateBase()) {
+    opt.onError?.()
+    return
+  }
+  if (getFileExt(opt.file.name) !== 'docx') {
+    ElMessage.warning('请导入 .docx 文件')
+    opt.onError?.()
+    return
+  }
+  const fd = new FormData()
+  fd.append('file', opt.file)
+  let uploadedPath = ''
+  request({ url: '/common/upload', method: 'post', data: fd, headers: { 'Content-Type': 'multipart/form-data' } }).then(res => {
+    const fileUrl = res.fileName || res.url
+    uploadedPath = fileUrl
+    const title = form.value.title || opt.file.name.replace(/\.docx$/i, '')
+    return ops.addReport({ projectId: form.value.projectId, versionType: form.value.versionType, title, content: '[Word报告] ' + title, fileUrl }).then(r => ({ r, title, fileUrl }))
+  }).then(({ r, title, fileUrl }) => {
+    ElMessage.success('报告已导入')
+    dlgAdd.value = false
+    opt.onSuccess?.(r)
+    getList()
+    const id = r.data?.id || r.id
+    openReportDoc({ ...form.value, id, title, fileUrl }, true)
+  }).catch(() => {
+    cleanupUploadedFile(uploadedPath)
+    ElMessage.error('导入失败')
+    opt.onError?.()
   })
 }
 
-function formatContent(text) {
-  if (!text) return '<span style="color:#909399">暂无内容</span>'
-  return text
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/\n/g, '<br>')
-    .replace(/^(#{1,4})\s*(.+)$/gm, (_, h, t) => `<h${h.length} style="margin:16px 0 8px;color:#303133">${t}</h${h.length}>`)
-    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+function openReportDoc(row, edit) {
+  if (!row.fileUrl) return ElMessage.warning('该报告没有可预览的 Word 文件')
+  const url = row.fileUrl.includes('/audit-template/default/') ? row.fileUrl + '?v=20260714' : row.fileUrl
+  router.push('/audit/doc-preview?url=' + encodeURIComponent(url) + '&name=' + encodeURIComponent(getPreviewName(row.fileUrl, row.title || row.projectName || '审计报告')) + '&reportId=' + encodeURIComponent(row.id) + '&returnPath=' + encodeURIComponent('/audit/report') + (edit ? '&edit=1' : ''))
 }
 
-getList()
+function validateBase() {
+  if (!form.value.projectId) {
+    ElMessage.warning('请选择项目')
+    return false
+  }
+  if (!form.value.versionType) {
+    ElMessage.warning('请选择版本')
+    return false
+  }
+  return true
+}
+
+function versionTag(version) {
+  return { '处内审核稿': '', '征求意见稿': 'warning', '正式稿': 'success' }[version] || ''
+}
+
+function getFileExt(name) {
+  const cleanName = decodeURIComponent(String(name || '').split('?')[0])
+  return cleanName.includes('.') ? cleanName.split('.').pop().toLowerCase() : ''
+}
+
+function getPreviewName(fileUrl, fallback) {
+  const ext = getFileExt(fileUrl)
+  const fallbackName = fallback || '文档'
+  if (!ext) return fallbackName
+  return fallbackName.toLowerCase().endsWith('.' + ext) ? fallbackName : fallbackName + '.' + ext
+}
 </script>
 
 <style scoped>
-.report-content {
-  padding: 20px 30px;
-  min-height: 400px;
-  max-height: calc(100vh - 280px);
-  overflow-y: auto;
-  background: #fafbfc;
-  border-radius: 6px;
-  font-size: 14px;
-  line-height: 2;
-  color: #303133;
+.upload-icon {
+  font-size: 40px;
+  color: #909399;
 }
 </style>

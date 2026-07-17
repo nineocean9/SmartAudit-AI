@@ -3,6 +3,7 @@ package com.ruoyi.system.service;
 import com.ruoyi.system.domain.AiConversation;
 import com.ruoyi.system.domain.AiMessage;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import com.ruoyi.common.core.domain.model.LoginUser;
 import java.util.List;
 
 /**
@@ -67,5 +68,6 @@ public interface IAiChatService
     /**
      * 发送消息并以 SSE 流式返回 AI 回复
      */
-    void chat(Long conversationId, String userMessage, Long userId, String username, SseEmitter emitter);
+    void chat(Long conversationId, String userMessage, Long selectedProjectId,
+              boolean resume, LoginUser loginUser, SseEmitter emitter);
 }

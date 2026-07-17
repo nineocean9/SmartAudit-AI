@@ -7,11 +7,13 @@ ruoyi:
   # 版权年份
   copyrightYear: 2026
   # 文件路径 示例（ Windows配置D:/ruoyi/uploadPath，Linux配置 /home/ruoyi/uploadPath）
-  profile: D:/ruoyi/uploadPath
+  profile: ${RUOYI_PROFILE:D:/ruoyi/uploadPath}
   # 获取ip地址开关
   addressEnabled: false
   # 验证码类型 math 数字计算 char 字符验证
   captchaType: math
+  # 演示环境返回验证码明文，便于测试账号一键切换；正式环境请改为 false
+  demoCaptchaEnabled: false
 
 # 开发环境配置
 server:
@@ -72,13 +74,13 @@ spring:
     # redis 配置
     redis:
       # 地址
-      host: localhost
+      host: ${REDIS_HOST:localhost}
       # 端口，默认为6379
-      port: 6379
+      port: ${REDIS_PORT:6379}
       # 数据库索引
       database: 0
       # 密码
-      password:
+      password: ${REDIS_PASSWORD:}
       # 连接超时时间
       timeout: 10s
       lettuce:
@@ -97,7 +99,7 @@ token:
   # 令牌自定义标识
   header: Authorization
   # 令牌密钥
-  secret: abcdefghijklmnopqrstuvwxyz
+  secret: ${TOKEN_SECRET:abcdefghijklmnopqrstuvwxyz}
   # 令牌有效期（默认30分钟）
   expireTime: 30
 
@@ -163,7 +165,7 @@ ai:
     provider: mimo
 
     # ── API Key（dashscope / openai / mimo / deepseek 需要）────────────
-    api-key: sk-c4poed9pfc8is2egy36ywtvm5y2knsgv9iwwowgnf9g6iu2v
+    api-key: ${AI_MODEL_API_KEY:}
 
     # ── 模型名称 ────────────────────────────────────────────────
     # dashscope : qwen-turbo（快/便宜）| qwen-plus（均衡）| qwen-max（最强）
@@ -222,7 +224,7 @@ ai:
       # 提供商: dashscope
       provider: dashscope
       # API Key（留空则复用 chat 的 api-key；百炼 API Key 以 sk- 开头）
-      api-key: sk-ws-H.RXEDPPD.MQnd.MEUCIQDVpWH8U9YOoESdI0Y26bMSNK3ZsiVVPuGneyIBEnNcSwIgC9-7Ay2EFlpZXt4bbnn-zxSGV4RWRKtIToXk8yJjZw8
+      api-key: ${AI_EMBEDDING_API_KEY:}
       # 模型: text-embedding-v4(最新/1024维) | text-embedding-v3(1024维)
       model: text-embedding-v4
       # 百炼兼容接口地址（{WorkspaceId} 替换为你的业务空间ID）

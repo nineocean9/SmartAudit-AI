@@ -1,6 +1,20 @@
 -- ============================================================
 -- 项目查询演示数据（模块一 审计信息管理 子集）
 -- ============================================================
+-- 执行前置：
+-- 1. 已执行 PostgreSQL 基础库脚本 ry_20250522.sql。
+-- 2. 已执行 ai_init_pg.sql，确保 audit_basis 已存在。
+-- 3. 已执行 module_1.sql，确保 audit_plan 已存在。
+
+DO $$
+BEGIN
+  IF to_regclass('audit_basis') IS NULL THEN
+    RAISE EXCEPTION '缺少 audit_basis，请先执行 sql/ai_init_pg.sql。';
+  END IF;
+  IF to_regclass('audit_plan') IS NULL THEN
+    RAISE EXCEPTION '缺少 audit_plan，请先执行 sql/module_1.sql。';
+  END IF;
+END $$;
 
 -- 1. 审计项目表
 CREATE TABLE IF NOT EXISTS audit_project (
@@ -9,15 +23,23 @@ CREATE TABLE IF NOT EXISTS audit_project (
   audited_unit    VARCHAR(255)    NOT NULL,
   audit_type      VARCHAR(64)     NOT NULL,
   audit_year      INT             NOT NULL,
+  plan_id         BIGINT,
   status          SMALLINT        DEFAULT 0,
   create_time     TIMESTAMP       DEFAULT now(),
   update_time     TIMESTAMP
 );
+ALTER TABLE audit_project ADD COLUMN IF NOT EXISTS plan_id BIGINT;
+ALTER TABLE audit_project ADD COLUMN IF NOT EXISTS start_date DATE;
+ALTER TABLE audit_project ADD COLUMN IF NOT EXISTS end_date DATE;
+ALTER TABLE audit_project ADD COLUMN IF NOT EXISTS progress INT DEFAULT 0;
+ALTER TABLE audit_project ADD COLUMN IF NOT EXISTS phase VARCHAR(20) DEFAULT '准备';
+ALTER TABLE audit_project ADD COLUMN IF NOT EXISTS is_overdue INT DEFAULT 0;
 COMMENT ON TABLE audit_project IS '审计项目';
 COMMENT ON COLUMN audit_project.project_name IS '项目名称';
-COMMENT ON COLUMN audit_project.audited_unit IS '被审单位';
+COMMENT ON COLUMN audit_project.audited_unit IS '被审计单位';
 COMMENT ON COLUMN audit_project.audit_type IS '审计类型：经责审计/财务收支/专项审计/工程审计';
 COMMENT ON COLUMN audit_project.audit_year IS '审计年度';
+COMMENT ON COLUMN audit_project.plan_id IS '关联计划ID';
 COMMENT ON COLUMN audit_project.status IS '0未启动 1实施中 2已归档';
 
 -- 2. 审计问题表
@@ -27,11 +49,17 @@ CREATE TABLE IF NOT EXISTS audit_issue (
   issue_desc      TEXT            NOT NULL,
   severity        SMALLINT        DEFAULT 1,
   basis_id        BIGINT          REFERENCES audit_basis(id),
+  source          VARCHAR(64)     DEFAULT '审计发现',
+  deadline        DATE,
   create_time     TIMESTAMP       DEFAULT now()
 );
+ALTER TABLE audit_issue ADD COLUMN IF NOT EXISTS source VARCHAR(64) DEFAULT '审计发现';
+ALTER TABLE audit_issue ADD COLUMN IF NOT EXISTS deadline DATE;
 COMMENT ON TABLE audit_issue IS '审计问题';
 COMMENT ON COLUMN audit_issue.severity IS '1低 2中 3高';
 COMMENT ON COLUMN audit_issue.basis_id IS '关联依据';
+COMMENT ON COLUMN audit_issue.source IS '问题来源：审计发现/外部移送/巡视反馈';
+COMMENT ON COLUMN audit_issue.deadline IS '整改截止日期';
 CREATE INDEX idx_issue_project ON audit_issue(project_id);
 
 -- 3. 整改记录表
@@ -65,6 +93,66 @@ UPDATE audit_project SET plan_id = 2 WHERE id = 2;
 UPDATE audit_project SET plan_id = 3 WHERE id = 3;
 UPDATE audit_project SET plan_id = 4 WHERE id = 4;
 UPDATE audit_project SET plan_id = 5 WHERE id = 5;
+
+-- 项目进度演示数据：用于“项目进度”甘特图、进度概览和项目列表展示。
+UPDATE audit_project
+SET start_date = '2024-03-01', end_date = '2024-06-30', progress = 100, phase = '归档', is_overdue = 0, status = 2
+WHERE id = 1;
+
+UPDATE audit_project
+SET start_date = '2023-09-01', end_date = '2023-12-20', progress = 100, phase = '归档', is_overdue = 0, status = 2
+WHERE id = 2;
+
+UPDATE audit_project
+SET start_date = '2024-05-10', end_date = '2024-09-30', progress = 100, phase = '归档', is_overdue = 0, status = 2
+WHERE id = 3;
+
+UPDATE audit_project
+SET start_date = '2026-02-20', end_date = '2026-06-30', progress = 82, phase = '整改跟踪', is_overdue = 1, status = 1
+WHERE id = 4;
+
+UPDATE audit_project
+SET start_date = '2026-04-01', end_date = '2026-08-31', progress = 56, phase = '现场实施', is_overdue = 0, status = 1
+WHERE id = 5;
+
+UPDATE audit_project
+SET project_name = '信息工程学院2026年预算执行审计',
+    audited_unit = '信息工程学院',
+    audit_type = '预算执行',
+    audit_year = 2026,
+    start_date = '2026-05-20',
+    end_date = '2026-10-31',
+    progress = 35,
+    phase = '现场实施',
+    is_overdue = 0,
+    status = 1
+WHERE id = 6;
+
+UPDATE audit_project
+SET project_name = '科研经费2026年专项审计',
+    audited_unit = '科学技术研究院',
+    audit_type = '专项审计',
+    audit_year = 2026,
+    start_date = '2026-09-01',
+    end_date = '2026-12-15',
+    progress = 0,
+    phase = '准备',
+    is_overdue = 0,
+    status = 0
+WHERE id = 7;
+
+UPDATE audit_project
+SET project_name = '资产经营公司2026年度财务收支审计',
+    audited_unit = '资产经营公司',
+    audit_type = '财务收支',
+    audit_year = 2026,
+    start_date = '2026-10-08',
+    end_date = '2026-12-31',
+    progress = 0,
+    phase = '准备',
+    is_overdue = 0,
+    status = 0
+WHERE id = 8;
 
 -- 问题（ID从1开始）
 INSERT INTO audit_issue (project_id, issue_desc, severity, basis_id) VALUES

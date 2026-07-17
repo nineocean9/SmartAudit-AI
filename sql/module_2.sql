@@ -3,10 +3,12 @@
 CREATE TABLE IF NOT EXISTS audit_scheme (
   id              BIGSERIAL       PRIMARY KEY,
   project_id      BIGINT          REFERENCES audit_project(id),
+  title           VARCHAR(200),
   content         TEXT,
   template_id     VARCHAR(64),
+  file_url        VARCHAR(500),
   status          SMALLINT        DEFAULT 0,
-  create_by       VARCHAR(64), create_time TIMESTAMP DEFAULT now()
+  create_by       VARCHAR(64), create_time TIMESTAMP DEFAULT now(), update_time TIMESTAMP
 );
 COMMENT ON TABLE audit_scheme IS '项目方案';
 COMMENT ON COLUMN audit_scheme.status IS '0草稿 1已审批';
@@ -35,15 +37,17 @@ CREATE TABLE IF NOT EXISTS audit_review (
   create_time     TIMESTAMP       DEFAULT now()
 );
 COMMENT ON TABLE audit_review IS '底稿复核';
-COMMENT ON COLUMN audit_review.level IS '主审/组长/负责人';
+COMMENT ON COLUMN audit_review.level IS '主审/项目组长/审计处长';
 COMMENT ON COLUMN audit_review.status IS '0待审 1通过 2驳回';
 
 -- 4. 审计报告
 CREATE TABLE IF NOT EXISTS audit_report (
   id              BIGSERIAL       PRIMARY KEY,
   project_id      BIGINT          REFERENCES audit_project(id),
+  title           VARCHAR(200),
   version_type    VARCHAR(32),
   content         TEXT,
+  file_url        VARCHAR(500),
   status          SMALLINT        DEFAULT 0,
   create_by       VARCHAR(64), create_time TIMESTAMP DEFAULT now(), update_time TIMESTAMP
 );
@@ -75,11 +79,11 @@ ON CONFLICT DO NOTHING;
 
 INSERT INTO audit_review (workpaper_id, reviewer, level, opinion, status) VALUES
 (1, 'admin', '主审', '底稿内容完整，依据引用准确，同意归档。', 1),
-(1, 'admin', '组长', '核实无误，同意主审意见。', 1)
+(1, 'admin', '项目组长', '核实无误，同意主审意见。', 1)
 ON CONFLICT DO NOTHING;
 
-INSERT INTO audit_report (project_id, version_type, content, status, create_by) VALUES
-(1, '处内审核稿', '信息工程学院2024年度经济责任审计报告（初稿）\n\n一、基本情况\n信息工程学院2024年度预算1200万元，支出780万元。\n\n二、审计发现\n1. 采购未招标问题（金额85万元）\n2. 预算执行率仅65%\n3. 合同签订不规范\n\n三、审计评价\n该单位整体经济责任履行基本到位，但在采购管理、预算执行方面存在不足。', 1, 'admin')
+INSERT INTO audit_report (project_id, title, version_type, content, file_url, status, create_by) VALUES
+(1, '信息工程学院2024年度经济责任审计报告', '处内审核稿', '信息工程学院2024年度经济责任审计报告（初稿）\n\n一、基本情况\n信息工程学院2024年度预算1200万元，支出780万元。\n\n二、审计发现\n1. 采购未招标问题（金额85万元）\n2. 预算执行率仅65%\n3. 合同签订不规范\n\n三、审计评价\n该单位整体经济责任履行基本到位，但在采购管理、预算执行方面存在不足。', '/audit-template/default/audit-report-draft-template.docx', 1, 'admin')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO audit_collab_log (project_id, user_id, action, target) VALUES

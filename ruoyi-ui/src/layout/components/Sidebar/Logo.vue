@@ -84,6 +84,10 @@ const getLogoTextColor = computed(() => {
     & .sidebar-title {
       display: inline-block;
       margin: 0;
+      max-width: 164px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
       color: v-bind(getLogoTextColor);
       font-weight: 600;
       line-height: 50px;

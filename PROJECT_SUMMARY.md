@@ -175,7 +175,7 @@
 - 计划 CRUD + 绑定项目 + AI 推荐审计对象
 - 支持年度计划/专项计划
 
-#### 被审单位 (`unit.vue`)
+#### 被审计单位 (`unit.vue`)
 - 单位管理 + AI 画像生成
 
 #### 审计实施 (`project.vue` → `AuditOpsController`)
@@ -218,7 +218,7 @@
 | `audit_risk_case` | 风险案例 | title, content, risk_type |
 | `audit_workpaper` | 审计底稿 | project_id, title, content, review_status |
 | `audit_report` | 审计报告 | project_id, title, version, content |
-| `audit_unit` | 被审单位 | unit_name, unit_type, leader |
+| `audit_unit` | 被审计单位 | unit_name, unit_type, leader |
 | `audit_leader` | 单位领导 | unit_id, name, position |
 
 ### AI 相关表
@@ -298,7 +298,7 @@ F:\project1\RuoYi-Vue-v3.9.2\
 │       │   │   ├── excelView.vue       # Excel 表格查看
 │       │   │   ├── workpaper.vue       # 底稿管理
 │       │   │   ├── report.vue          # 报告管理
-│       │   │   ├── unit.vue            # 被审单位
+│       │   │   ├── unit.vue            # 被审计单位
 │       │   │   ├── case.vue            # 案例库
 │       │   │   └── risk.vue            # 风险案例库
 │       │   └── knowledge/

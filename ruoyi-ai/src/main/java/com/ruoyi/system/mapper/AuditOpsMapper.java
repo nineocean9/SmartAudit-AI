@@ -9,7 +9,9 @@ public interface AuditOpsMapper
 {
     // 方案
     List<Map<String,Object>> selectSchemeList(Long projectId);
+    Map<String,Object> selectSchemeById(Long id);
     int insertScheme(Map<String,Object> s);
+    int updateSchemeContent(Map<String,Object> s);
 
     // 底稿
     List<AuditWorkpaper> selectWorkpaperList(AuditWorkpaper w);
@@ -26,6 +28,7 @@ public interface AuditOpsMapper
     AuditReport selectReportById(Long id);
     int insertReport(AuditReport r);
     int updateReport(AuditReport r);
+    int updateReportContent(AuditReport r);
 
     // 协同日志
     List<Map<String,Object>> selectCollabLog(Long projectId);
