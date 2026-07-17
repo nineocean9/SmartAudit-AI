@@ -4,6 +4,8 @@ RUN corepack enable && corepack prepare pnpm@11.9.0 --activate
 COPY ruoyi-ui/package.json ruoyi-ui/pnpm-lock.yaml ruoyi-ui/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY ruoyi-ui/ .
+# 2GB 内存服务器构建优化
+ENV NODE_OPTIONS=--max-old-space-size=1536
 RUN pnpm build:prod
 
 FROM nginx:1.27-alpine

@@ -5,7 +5,7 @@ RUN mvn -pl ruoyi-admin -am -DskipTests clean package
 
 FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
-RUN useradd --system --uid 10001 ruoyi && mkdir -p /data/uploadPath && chown -R ruoyi:ruoyi /app /data
+RUN useradd --system --uid 10001 ruoyi && mkdir -p /data/uploadPath /home/ruoyi/logs && chown -R ruoyi:ruoyi /app /data /home/ruoyi
 COPY --from=builder /build/ruoyi-admin/target/ruoyi-admin.jar /app/app.jar
 USER ruoyi
 EXPOSE 8080
